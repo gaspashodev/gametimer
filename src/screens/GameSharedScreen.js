@@ -23,6 +23,19 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const globalIntervalRef = useRef(null);
   const playerIntervalsRef = useRef({});
+  
+  // Refs pour stocker les valeurs en temps réel sans déclencher de re-render
+  const globalTimeRef = useRef(0);
+  const playersRef = useRef([]);
+
+  // Mettre à jour les refs à chaque changement
+  useEffect(() => {
+    globalTimeRef.current = globalTime;
+  }, [globalTime]);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   useEffect(() => {
     // Connexion au socket
@@ -30,8 +43,33 @@ const GameSharedScreen = ({ route, navigation }) => {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        setPlayers(session.players);
-        setGlobalTime(session.globalTime);
+        // Mettre à jour seulement si on n'a pas de timer actif localement
+        // ou si la différence est significative (>2 secondes)
+        const localGlobalTime = globalTimeRef.current;
+        const serverGlobalTime = session.globalTime;
+        
+        // Si la différence est > 2 secondes, prendre la valeur du serveur
+        if (Math.abs(localGlobalTime - serverGlobalTime) > 2) {
+          setGlobalTime(serverGlobalTime);
+        }
+        
+        // Pour les joueurs, garder les temps locaux si un timer tourne
+        const updatedPlayers = session.players.map(serverPlayer => {
+          const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
+          
+          // Si le joueur était en cours d'exécution localement et que le temps local
+          // est proche du serveur, garder le temps local pour éviter les sauts
+          if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
+            const timeDiff = Math.abs(localPlayer.time - serverPlayer.time);
+            if (timeDiff <= 2) {
+              return { ...serverPlayer, time: localPlayer.time };
+            }
+          }
+          
+          return serverPlayer;
+        });
+        
+        setPlayers(updatedPlayers);
         setCurrentPlayerIndex(session.currentPlayerIndex);
       },
     };
@@ -53,7 +91,8 @@ const GameSharedScreen = ({ route, navigation }) => {
       globalIntervalRef.current = setInterval(() => {
         setGlobalTime((prev) => {
           const newTime = prev + 1;
-          if (newTime % 5 === 0) {
+          // Envoyer au serveur toutes les 3 secondes au lieu de 5
+          if (newTime % 3 === 0) {
             ApiService.updateGlobalTime(sessionId, newTime);
           }
           return newTime;
@@ -82,7 +121,8 @@ const GameSharedScreen = ({ route, navigation }) => {
             );
 
             const updatedPlayer = newPlayers.find((p) => p.id === player.id);
-            if (updatedPlayer.time % 5 === 0) {
+            // Envoyer au serveur toutes les 3 secondes au lieu de 5
+            if (updatedPlayer.time % 3 === 0) {
               ApiService.updateTime(sessionId, player.id, updatedPlayer.time);
             }
 
@@ -102,7 +142,20 @@ const GameSharedScreen = ({ route, navigation }) => {
   }, [players, sessionId]);
 
   const togglePlayer = (playerId) => {
-    ApiService.togglePlayer(sessionId, playerId);
+    // SOLUTION AU PROBLÈME 2 : Envoyer les temps exacts AVANT le toggle
+    const player = players.find(p => p.id === playerId);
+    if (player && player.isRunning) {
+      // Envoyer le temps exact du joueur
+      ApiService.updateTime(sessionId, playerId, player.time);
+    }
+    
+    // SOLUTION AU PROBLÈME 1 : Envoyer le temps global exact
+    ApiService.updateGlobalTime(sessionId, globalTime);
+    
+    // Puis effectuer le toggle
+    setTimeout(() => {
+      ApiService.togglePlayer(sessionId, playerId);
+    }, 50); // Petit délai pour s'assurer que les temps sont envoyés avant
   };
 
   const handleReset = () => {

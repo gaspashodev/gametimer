@@ -142,7 +142,12 @@ io.on('connection', (socket) => {
     }
 
     session.lastUpdate = new Date();
-    io.to(sessionId).emit('session-state', session);
+    
+    // IMPORTANT : Attendre un peu avant d'émettre pour laisser le temps 
+    // aux autres événements (update-time, update-global-time) d'arriver
+    setTimeout(() => {
+      io.to(sessionId).emit('session-state', session);
+    }, 100);
   });
 
   socket.on('update-time', ({ sessionId, playerId, time }) => {
@@ -151,9 +156,15 @@ io.on('connection', (socket) => {
 
     const player = session.players.find(p => p.id === playerId);
     if (player) {
-      player.time = time;
+      // AMÉLIORATION : Ne mettre à jour que si le nouveau temps est supérieur
+      // (évite les problèmes de désynchronisation)
+      if (time >= player.time) {
+        player.time = time;
+      }
       session.lastUpdate = new Date();
-      io.to(sessionId).emit('session-state', session);
+      
+      // Ne pas émettre immédiatement pour éviter trop de trafic réseau
+      // Les clients ont déjà la valeur locale, ils n'ont besoin que de confirmation
     }
   });
 
@@ -161,9 +172,13 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
 
-    session.globalTime = globalTime;
+    // AMÉLIORATION : Ne mettre à jour que si le nouveau temps est supérieur
+    if (globalTime >= session.globalTime) {
+      session.globalTime = globalTime;
+    }
     session.lastUpdate = new Date();
-    io.to(sessionId).emit('session-state', session);
+    
+    // Ne pas émettre immédiatement pour éviter trop de trafic réseau
   });
 
   socket.on('reset-session', (sessionId) => {
