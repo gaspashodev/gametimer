@@ -48,20 +48,9 @@ const GameSharedScreen = ({ route, navigation }) => {
         const anyRunning = session.players.some(p => p.isRunning);
         
         // Logique de réconciliation du temps global
-        if (mode === 'sequential') {
-          // En mode séquentiel : ne pas synchroniser le globalTime du serveur
-          // car il est calculé localement comme la somme des temps des joueurs
-          // On laisse le useEffect s'en charger
-        } else {
-          // En mode indépendant : logique de réconciliation normale
-          if (anyRunning) {
-            if (serverGlobalTime > localGlobalTime) {
-              setGlobalTime(serverGlobalTime);
-            }
-          } else {
-            setGlobalTime(serverGlobalTime);
-          }
-        }
+        // Ne pas synchroniser le globalTime du serveur car il est calculé localement 
+        // comme la somme des temps des joueurs (dans les deux modes)
+        // On laisse le useEffect s'en charger
         
         // Pour les joueurs, prendre le MAX pour éviter de revenir en arrière
         const updatedPlayers = session.players.map(serverPlayer => {
@@ -91,48 +80,18 @@ const GameSharedScreen = ({ route, navigation }) => {
     };
   }, [sessionId]);
 
-  // Timer global - En mode séquentiel, c'est la somme des temps des joueurs
-  // En mode indépendant, c'est un chrono séparé
+  // ✅ CORRECTION : Timer global - TOUJOURS la somme des temps de tous les joueurs
+  // (que ce soit en mode séquentiel ou indépendant)
   useEffect(() => {
-    if (mode === 'sequential') {
-      // En mode séquentiel : globalTime = somme des temps des joueurs
-      const total = players.reduce((sum, player) => sum + player.time, 0);
-      setGlobalTime(total);
-      
-      // Envoyer au serveur toutes les 3 secondes
-      if (total % 3 === 0 && total > 0) {
-        ApiService.updateGlobalTime(sessionId, total);
-      }
-    } else {
-      // En mode indépendant : timer global indépendant
-      const anyRunning = players.some((p) => p.isRunning);
-
-      if (anyRunning) {
-        if (!globalIntervalRef.current) {
-          globalIntervalRef.current = setInterval(() => {
-            setGlobalTime((prev) => {
-              const newTime = prev + 1;
-              if (newTime % 3 === 0) {
-                ApiService.updateGlobalTime(sessionId, newTime);
-              }
-              return newTime;
-            });
-          }, 1000);
-        }
-      } else {
-        if (globalIntervalRef.current) {
-          clearInterval(globalIntervalRef.current);
-          globalIntervalRef.current = null;
-        }
-      }
+    // Calculer le temps global comme la somme de tous les temps des joueurs
+    const total = players.reduce((sum, player) => sum + player.time, 0);
+    setGlobalTime(total);
+    
+    // Envoyer au serveur toutes les 3 secondes
+    if (total % 3 === 0 && total > 0) {
+      ApiService.updateGlobalTime(sessionId, total);
     }
-
-    return () => {
-      if (globalIntervalRef.current) {
-        clearInterval(globalIntervalRef.current);
-      }
-    };
-  }, [mode, players, sessionId]);
+  }, [players, sessionId]);
 
   // Timers individuels
   useEffect(() => {
@@ -172,10 +131,17 @@ const GameSharedScreen = ({ route, navigation }) => {
       ApiService.updateTime(sessionId, playerId, player.time);
     }
     
-    // En mode indépendant seulement, envoyer le temps global
-    // En mode séquentiel, il est calculé automatiquement (somme des joueurs)
-    if (mode === 'independent') {
-      ApiService.updateGlobalTime(sessionId, globalTime);
+    // Envoyer le temps global (somme de tous les joueurs)
+    ApiService.updateGlobalTime(sessionId, globalTime);
+    
+    // En mode séquentiel, si tous sont en pause et qu'on clique sur un joueur,
+    // mettre à jour currentPlayerIndex pour définir ce joueur comme actif
+    if (mode === 'sequential') {
+      const allPaused = players.every(p => !p.isRunning);
+      if (allPaused) {
+        const playerIndex = players.findIndex(p => p.id === playerId);
+        setCurrentPlayerIndex(playerIndex);
+      }
     }
     
     // Puis effectuer le toggle
@@ -229,7 +195,19 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const renderPlayer = ({ item: player, index }) => {
     const isCurrentTurn = mode === 'sequential' && index === currentPlayerIndex;
-    const canInteract = mode === 'independent' || isCurrentTurn;
+    const allPaused = players.every(p => !p.isRunning);
+    
+    // Logique d'interaction selon le mode
+    let canInteract;
+    if (mode === 'independent') {
+      // Mode indépendant : tous les joueurs sont toujours cliquables
+      canInteract = true;
+    } else {
+      // Mode séquentiel :
+      // - Si tous en pause → tous cliquables (permet de choisir qui commence)
+      // - Si un joueur joue → seul celui-ci est cliquable (pour passer au suivant)
+      canInteract = allPaused || isCurrentTurn;
+    }
 
     return (
       <View
