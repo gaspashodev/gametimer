@@ -1,20 +1,59 @@
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import HomeScreen from './src/screens/HomeScreen';
+import ConfigScreen from './src/screens/ConfigScreen';
+import JoinScreen from './src/screens/JoinScreen';
+import GameSharedScreen from './src/screens/GameSharedScreen';
+import GameDistributedScreen from './src/screens/GameDistributedScreen';
+
+const Stack = createStackNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar style="light" />
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName="Home"
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: '#4F46E5',
+            },
+            headerTintColor: '#fff',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+          }}
+        >
+          <Stack.Screen 
+            name="Home" 
+            component={HomeScreen}
+            options={{ title: 'Timer Multi-Joueurs' }}
+          />
+          <Stack.Screen 
+            name="Config" 
+            component={ConfigScreen}
+            options={{ title: 'Configuration' }}
+          />
+          <Stack.Screen 
+            name="Join" 
+            component={JoinScreen}
+            options={{ title: 'Rejoindre une Partie' }}
+          />
+          <Stack.Screen 
+            name="GameShared" 
+            component={GameSharedScreen}
+            options={{ title: 'Partie en Cours', headerLeft: null }}
+          />
+          <Stack.Screen 
+            name="GameDistributed" 
+            component={GameDistributedScreen}
+            options={{ title: 'Ma Partie', headerLeft: null }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
