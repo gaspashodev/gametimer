@@ -26,6 +26,13 @@ const GameDistributedScreen = ({ route, navigation }) => {
                    players[currentPlayerIndex]?.id === myPlayerId;
 
   const playerIntervalRef = useRef(null);
+  
+  // Refs pour stocker les valeurs locales
+  const playersRef = useRef([]);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   useEffect(() => {
     // Connexion au socket
@@ -33,7 +40,25 @@ const GameDistributedScreen = ({ route, navigation }) => {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        setPlayers(session.players);
+        // ✅ CORRECTION : Réconciliation pour éviter d'écraser le chrono local
+        const updatedPlayers = session.players.map(serverPlayer => {
+          // Si c'est MON joueur ET qu'il est en cours
+          if (serverPlayer.id === myPlayerId) {
+            const localPlayer = playersRef.current.find(p => p.id === myPlayerId);
+            
+            // Si je suis en train de jouer, garder le MAX entre local et serveur
+            if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
+              return {
+                ...serverPlayer,
+                time: Math.max(localPlayer.time, serverPlayer.time)
+              };
+            }
+          }
+          
+          return serverPlayer;
+        });
+        
+        setPlayers(updatedPlayers);
         setGlobalTime(session.globalTime);
         setCurrentPlayerIndex(session.currentPlayerIndex);
       },
@@ -45,7 +70,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
       ApiService.disconnectSocket();
       if (playerIntervalRef.current) clearInterval(playerIntervalRef.current);
     };
-  }, [sessionId]);
+  }, [sessionId, myPlayerId]);
 
   // ✅ CORRECTION : Timer global - TOUJOURS la somme des temps de tous les joueurs
   useEffect(() => {
@@ -55,20 +80,29 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
   // Timer du joueur local uniquement
   useEffect(() => {
-    if (myPlayer && myPlayer.isRunning && !playerIntervalRef.current) {
+    const isRunning = myPlayer?.isRunning || false;
+    
+    if (isRunning && !playerIntervalRef.current) {
+      // Démarrer l'interval
       playerIntervalRef.current = setInterval(() => {
-        setPlayers((prev) =>
-          prev.map((p) =>
-            p.id === myPlayerId ? { ...p, time: p.time + 1 } : p
-          )
-        );
-        
-        // Envoyer la mise à jour au serveur toutes les 3 secondes
-        if (myPlayer.time % 3 === 0) {
-          ApiService.updateTime(sessionId, myPlayerId, myPlayer.time + 1);
-        }
+        setPlayers((prev) => {
+          return prev.map((p) => {
+            if (p.id === myPlayerId) {
+              const newTime = p.time + 1;
+              
+              // Envoyer la mise à jour au serveur toutes les 3 secondes
+              if (newTime % 3 === 0) {
+                ApiService.updateTime(sessionId, myPlayerId, newTime);
+              }
+              
+              return { ...p, time: newTime };
+            }
+            return p;
+          });
+        });
       }, 1000);
-    } else if (myPlayer && !myPlayer.isRunning && playerIntervalRef.current) {
+    } else if (!isRunning && playerIntervalRef.current) {
+      // Arrêter l'interval
       clearInterval(playerIntervalRef.current);
       playerIntervalRef.current = null;
     }
@@ -76,9 +110,10 @@ const GameDistributedScreen = ({ route, navigation }) => {
     return () => {
       if (playerIntervalRef.current) {
         clearInterval(playerIntervalRef.current);
+        playerIntervalRef.current = null;
       }
     };
-  }, [myPlayer, myPlayerId, sessionId]);
+  }, [myPlayer?.isRunning, myPlayerId, sessionId]); // ✅ Dépendances minimales
 
   const toggleMyPlayer = () => {
     if (mode === 'sequential' && !isMyTurn) {
@@ -344,7 +379,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B',
   },
   mainButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: '#D1D5DB',
+    opacity: 0.6,
   },
   mainButtonText: {
     color: '#fff',

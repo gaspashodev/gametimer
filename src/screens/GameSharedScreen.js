@@ -209,8 +209,8 @@ const GameSharedScreen = ({ route, navigation }) => {
         <TouchableOpacity
           style={[
             styles.playerButton,
-            !canInteract && styles.playerButtonDisabled,
             player.isRunning ? styles.pauseButton : styles.playButton,
+            !canInteract && styles.playerButtonDisabled, // ✅ EN DERNIER pour écraser
           ]}
           onPress={() => togglePlayer(player.id)}
           disabled={!canInteract}
@@ -410,7 +410,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B',
   },
   playerButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: '#D1D5DB',
+    opacity: 0.6,
   },
   playerButtonText: {
     color: '#fff',
