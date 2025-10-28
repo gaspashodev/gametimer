@@ -48,25 +48,26 @@ const GameSharedScreen = ({ route, navigation }) => {
         const anyRunning = session.players.some(p => p.isRunning);
         
         // Logique de réconciliation du temps global
-        if (anyRunning) {
-          // Si un chrono tourne : prendre le MAX entre local et serveur
-          // Cela évite de revenir en arrière
-          if (serverGlobalTime > localGlobalTime) {
+        if (mode === 'sequential') {
+          // En mode séquentiel : ne pas synchroniser le globalTime du serveur
+          // car il est calculé localement comme la somme des temps des joueurs
+          // On laisse le useEffect s'en charger
+        } else {
+          // En mode indépendant : logique de réconciliation normale
+          if (anyRunning) {
+            if (serverGlobalTime > localGlobalTime) {
+              setGlobalTime(serverGlobalTime);
+            }
+          } else {
             setGlobalTime(serverGlobalTime);
           }
-          // Sinon on garde la valeur locale qui continue de s'incrémenter
-        } else {
-          // Si aucun chrono ne tourne : synchroniser avec le serveur
-          setGlobalTime(serverGlobalTime);
         }
         
-        // Pour les joueurs, garder les temps locaux si un timer tourne
+        // Pour les joueurs, prendre le MAX pour éviter de revenir en arrière
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
-          // Si le joueur tourne localement ET sur le serveur
           if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
-            // Prendre le MAX pour éviter de revenir en arrière
             return { 
               ...serverPlayer, 
               time: Math.max(localPlayer.time, serverPlayer.time)
@@ -90,39 +91,48 @@ const GameSharedScreen = ({ route, navigation }) => {
     };
   }, [sessionId]);
 
-  // Timer global - géré indépendamment des mises à jour des joueurs
+  // Timer global - En mode séquentiel, c'est la somme des temps des joueurs
+  // En mode indépendant, c'est un chrono séparé
   useEffect(() => {
-    const anyRunning = players.some((p) => p.isRunning);
-
-    if (anyRunning) {
-      // Démarrer l'intervalle seulement s'il n'existe pas déjà
-      if (!globalIntervalRef.current) {
-        console.log('Démarrage du timer global');
-        globalIntervalRef.current = setInterval(() => {
-          setGlobalTime((prev) => {
-            const newTime = prev + 1;
-            // Envoyer au serveur toutes les 3 secondes
-            if (newTime % 3 === 0) {
-              ApiService.updateGlobalTime(sessionId, newTime);
-            }
-            return newTime;
-          });
-        }, 1000);
+    if (mode === 'sequential') {
+      // En mode séquentiel : globalTime = somme des temps des joueurs
+      const total = players.reduce((sum, player) => sum + player.time, 0);
+      setGlobalTime(total);
+      
+      // Envoyer au serveur toutes les 3 secondes
+      if (total % 3 === 0 && total > 0) {
+        ApiService.updateGlobalTime(sessionId, total);
       }
     } else {
-      // Arrêter l'intervalle seulement si tous les joueurs sont en pause
-      if (globalIntervalRef.current) {
-        console.log('Arrêt du timer global');
-        clearInterval(globalIntervalRef.current);
-        globalIntervalRef.current = null;
+      // En mode indépendant : timer global indépendant
+      const anyRunning = players.some((p) => p.isRunning);
+
+      if (anyRunning) {
+        if (!globalIntervalRef.current) {
+          globalIntervalRef.current = setInterval(() => {
+            setGlobalTime((prev) => {
+              const newTime = prev + 1;
+              if (newTime % 3 === 0) {
+                ApiService.updateGlobalTime(sessionId, newTime);
+              }
+              return newTime;
+            });
+          }, 1000);
+        }
+      } else {
+        if (globalIntervalRef.current) {
+          clearInterval(globalIntervalRef.current);
+          globalIntervalRef.current = null;
+        }
       }
     }
 
-    // Cleanup à la destruction du composant uniquement
     return () => {
-      // Ne pas nettoyer l'intervalle ici pour éviter les arrêts intempestifs
+      if (globalIntervalRef.current) {
+        clearInterval(globalIntervalRef.current);
+      }
     };
-  }, [players.map(p => p.isRunning).join(','), sessionId]); // Dépendance optimisée
+  }, [mode, players, sessionId]);
 
   // Timers individuels
   useEffect(() => {
@@ -156,20 +166,36 @@ const GameSharedScreen = ({ route, navigation }) => {
   }, [players, sessionId]);
 
   const togglePlayer = (playerId) => {
-    // SOLUTION AU PROBLÈME 2 : Envoyer les temps exacts AVANT le toggle
+    // Envoyer les temps exacts AVANT le toggle
     const player = players.find(p => p.id === playerId);
     if (player && player.isRunning) {
-      // Envoyer le temps exact du joueur
       ApiService.updateTime(sessionId, playerId, player.time);
     }
     
-    // SOLUTION AU PROBLÈME 1 : Envoyer le temps global exact
-    ApiService.updateGlobalTime(sessionId, globalTime);
+    // En mode indépendant seulement, envoyer le temps global
+    // En mode séquentiel, il est calculé automatiquement (somme des joueurs)
+    if (mode === 'independent') {
+      ApiService.updateGlobalTime(sessionId, globalTime);
+    }
     
     // Puis effectuer le toggle
     setTimeout(() => {
       ApiService.togglePlayer(sessionId, playerId);
-    }, 50); // Petit délai pour s'assurer que les temps sont envoyés avant
+    }, 50);
+  };
+
+  const pauseAll = () => {
+    // Envoyer les temps exacts de tous les joueurs en cours
+    players.forEach(player => {
+      if (player.isRunning) {
+        ApiService.updateTime(sessionId, player.id, player.time);
+      }
+    });
+
+    // Demander au serveur de mettre tous les joueurs en pause
+    setTimeout(() => {
+      ApiService.pauseAll(sessionId);
+    }, 50);
   };
 
   const handleReset = () => {
@@ -254,6 +280,14 @@ const GameSharedScreen = ({ route, navigation }) => {
             <Text style={styles.joinCodeText}>Code: {joinCode}</Text>
           </View>
           <View style={styles.headerButtons}>
+            {players.some(p => p.isRunning) && (
+              <TouchableOpacity 
+                style={[styles.iconButton, styles.pauseAllButton]} 
+                onPress={pauseAll}
+              >
+                <Icon name="pause-circle" size={24} color="#F59E0B" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
               <Icon name="refresh" size={24} color="#EF4444" />
             </TouchableOpacity>
@@ -325,6 +359,10 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 8,
+  },
+  pauseAllButton: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
   },
   globalTimeContainer: {
     alignItems: 'center',

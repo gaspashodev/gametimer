@@ -196,6 +196,19 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('session-state', session);
   });
 
+  socket.on('pause-all', (sessionId) => {
+    const session = gameSessions.get(sessionId);
+    if (!session) return;
+
+    // Mettre tous les joueurs en pause
+    session.players.forEach(p => {
+      p.isRunning = false;
+    });
+    session.lastUpdate = new Date();
+
+    io.to(sessionId).emit('session-state', session);
+  });
+
   socket.on('update-player-name', ({ sessionId, playerId, name }) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;

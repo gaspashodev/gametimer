@@ -123,6 +123,13 @@ class ApiService {
     }
   }
 
+  // Mettre en pause tous les joueurs
+  pauseAll(sessionId) {
+    if (this.socket) {
+      this.socket.emit('pause-all', sessionId);
+    }
+  }
+
   // Mettre à jour le nom d'un joueur
   updatePlayerName(sessionId, playerId, name) {
     if (this.socket) {
