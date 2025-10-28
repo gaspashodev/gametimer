@@ -134,17 +134,7 @@ const GameSharedScreen = ({ route, navigation }) => {
     // Envoyer le temps global (somme de tous les joueurs)
     ApiService.updateGlobalTime(sessionId, globalTime);
     
-    // En mode séquentiel, si tous sont en pause et qu'on clique sur un joueur,
-    // mettre à jour currentPlayerIndex pour définir ce joueur comme actif
-    if (mode === 'sequential') {
-      const allPaused = players.every(p => !p.isRunning);
-      if (allPaused) {
-        const playerIndex = players.findIndex(p => p.id === playerId);
-        setCurrentPlayerIndex(playerIndex);
-      }
-    }
-    
-    // Puis effectuer le toggle
+    // Effectuer le toggle
     setTimeout(() => {
       ApiService.togglePlayer(sessionId, playerId);
     }, 50);
@@ -195,7 +185,6 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const renderPlayer = ({ item: player, index }) => {
     const isCurrentTurn = mode === 'sequential' && index === currentPlayerIndex;
-    const allPaused = players.every(p => !p.isRunning);
     
     // Logique d'interaction selon le mode
     let canInteract;
@@ -203,10 +192,8 @@ const GameSharedScreen = ({ route, navigation }) => {
       // Mode indépendant : tous les joueurs sont toujours cliquables
       canInteract = true;
     } else {
-      // Mode séquentiel :
-      // - Si tous en pause → tous cliquables (permet de choisir qui commence)
-      // - Si un joueur joue → seul celui-ci est cliquable (pour passer au suivant)
-      canInteract = allPaused || isCurrentTurn;
+      // Mode séquentiel : seul le joueur actif est cliquable
+      canInteract = isCurrentTurn;
     }
 
     return (

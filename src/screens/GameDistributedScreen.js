@@ -20,9 +20,11 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
-  const isMyTurn = mode === 'sequential' && currentPlayerIndex === myPlayerId;
+  
+  // ✅ CORRECTION : Comparer l'ID du joueur à currentPlayerIndex, pas directement l'index
+  const isMyTurn = mode === 'sequential' && 
+                   players[currentPlayerIndex]?.id === myPlayerId;
 
-  const globalIntervalRef = useRef(null);
   const playerIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -41,32 +43,17 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
     return () => {
       ApiService.disconnectSocket();
-      if (globalIntervalRef.current) clearInterval(globalIntervalRef.current);
       if (playerIntervalRef.current) clearInterval(playerIntervalRef.current);
     };
   }, [sessionId]);
 
-  // Timer global
+  // ✅ CORRECTION : Timer global - TOUJOURS la somme des temps de tous les joueurs
   useEffect(() => {
-    const anyRunning = players.some((p) => p.isRunning);
-
-    if (anyRunning && !globalIntervalRef.current) {
-      globalIntervalRef.current = setInterval(() => {
-        setGlobalTime((prev) => prev + 1);
-      }, 1000);
-    } else if (!anyRunning && globalIntervalRef.current) {
-      clearInterval(globalIntervalRef.current);
-      globalIntervalRef.current = null;
-    }
-
-    return () => {
-      if (globalIntervalRef.current) {
-        clearInterval(globalIntervalRef.current);
-      }
-    };
+    const total = players.reduce((sum, player) => sum + player.time, 0);
+    setGlobalTime(total);
   }, [players]);
 
-  // Timer du joueur
+  // Timer du joueur local uniquement
   useEffect(() => {
     if (myPlayer && myPlayer.isRunning && !playerIntervalRef.current) {
       playerIntervalRef.current = setInterval(() => {
@@ -75,6 +62,11 @@ const GameDistributedScreen = ({ route, navigation }) => {
             p.id === myPlayerId ? { ...p, time: p.time + 1 } : p
           )
         );
+        
+        // Envoyer la mise à jour au serveur toutes les 3 secondes
+        if (myPlayer.time % 3 === 0) {
+          ApiService.updateTime(sessionId, myPlayerId, myPlayer.time + 1);
+        }
       }, 1000);
     } else if (myPlayer && !myPlayer.isRunning && playerIntervalRef.current) {
       clearInterval(playerIntervalRef.current);
@@ -86,14 +78,26 @@ const GameDistributedScreen = ({ route, navigation }) => {
         clearInterval(playerIntervalRef.current);
       }
     };
-  }, [myPlayer, myPlayerId]);
+  }, [myPlayer, myPlayerId, sessionId]);
 
   const toggleMyPlayer = () => {
     if (mode === 'sequential' && !isMyTurn) {
       Alert.alert('Attention', "Ce n'est pas votre tour !");
       return;
     }
-    ApiService.togglePlayer(sessionId, myPlayerId);
+    
+    // Envoyer le temps exact avant le toggle
+    if (myPlayer && myPlayer.isRunning) {
+      ApiService.updateTime(sessionId, myPlayerId, myPlayer.time);
+    }
+    
+    // Envoyer le temps global
+    ApiService.updateGlobalTime(sessionId, globalTime);
+    
+    // Effectuer le toggle
+    setTimeout(() => {
+      ApiService.togglePlayer(sessionId, myPlayerId);
+    }, 50);
   };
 
   const handleQuit = () => {

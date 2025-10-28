@@ -121,28 +121,23 @@ io.on('connection', (socket) => {
     if (!session) return;
 
     if (session.mode === 'sequential') {
-      // Mode séquentiel : logique améliorée
-      const allPaused = session.players.every(p => !p.isRunning);
-      const player = session.players.find(p => p.id === playerId);
+      // Mode séquentiel : seul le joueur actif peut être togglé
+      const currentPlayer = session.players[session.currentPlayerIndex];
       
-      if (!player) return;
+      if (!currentPlayer || currentPlayer.id !== playerId) {
+        // Joueur non actif essaie de cliquer → ignorer
+        return;
+      }
 
-      if (allPaused) {
-        // ✅ NOUVEAU : Si tous en pause, permettre de démarrer n'importe quel joueur
-        // Mettre à jour currentPlayerIndex pour pointer sur ce joueur
-        const playerIndex = session.players.findIndex(p => p.id === playerId);
-        session.currentPlayerIndex = playerIndex;
-        player.isRunning = true;
-      } else if (player.id === session.players[session.currentPlayerIndex].id && player.isRunning) {
-        // Le joueur actif clique sur son bouton "Suivant" → passer au suivant
-        player.isRunning = false;
+      if (currentPlayer.isRunning) {
+        // Le joueur actif clique sur "Suivant" → passer au suivant
+        currentPlayer.isRunning = false;
         session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
         session.players[session.currentPlayerIndex].isRunning = true;
-      } else if (player.id === session.players[session.currentPlayerIndex].id && !player.isRunning) {
+      } else {
         // Le joueur actif (en pause) clique sur "Démarrer"
-        player.isRunning = true;
+        currentPlayer.isRunning = true;
       }
-      // Sinon, ne rien faire (joueur non actif essaie de cliquer)
     } else {
       // Mode indépendant : toggle le joueur
       const player = session.players.find(p => p.id === playerId);
