@@ -43,13 +43,20 @@ const GameSharedScreen = ({ route, navigation }) => {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        // Mettre à jour seulement si on n'a pas de timer actif localement
-        // ou si la différence est significative (>2 secondes)
         const localGlobalTime = globalTimeRef.current;
         const serverGlobalTime = session.globalTime;
+        const anyRunning = session.players.some(p => p.isRunning);
         
-        // Si la différence est > 2 secondes, prendre la valeur du serveur
-        if (Math.abs(localGlobalTime - serverGlobalTime) > 2) {
+        // Logique de réconciliation du temps global
+        if (anyRunning) {
+          // Si un chrono tourne : prendre le MAX entre local et serveur
+          // Cela évite de revenir en arrière
+          if (serverGlobalTime > localGlobalTime) {
+            setGlobalTime(serverGlobalTime);
+          }
+          // Sinon on garde la valeur locale qui continue de s'incrémenter
+        } else {
+          // Si aucun chrono ne tourne : synchroniser avec le serveur
           setGlobalTime(serverGlobalTime);
         }
         
@@ -57,13 +64,13 @@ const GameSharedScreen = ({ route, navigation }) => {
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
-          // Si le joueur était en cours d'exécution localement et que le temps local
-          // est proche du serveur, garder le temps local pour éviter les sauts
+          // Si le joueur tourne localement ET sur le serveur
           if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
-            const timeDiff = Math.abs(localPlayer.time - serverPlayer.time);
-            if (timeDiff <= 2) {
-              return { ...serverPlayer, time: localPlayer.time };
-            }
+            // Prendre le MAX pour éviter de revenir en arrière
+            return { 
+              ...serverPlayer, 
+              time: Math.max(localPlayer.time, serverPlayer.time)
+            };
           }
           
           return serverPlayer;
@@ -83,32 +90,39 @@ const GameSharedScreen = ({ route, navigation }) => {
     };
   }, [sessionId]);
 
-  // Timer global
+  // Timer global - géré indépendamment des mises à jour des joueurs
   useEffect(() => {
     const anyRunning = players.some((p) => p.isRunning);
 
-    if (anyRunning && !globalIntervalRef.current) {
-      globalIntervalRef.current = setInterval(() => {
-        setGlobalTime((prev) => {
-          const newTime = prev + 1;
-          // Envoyer au serveur toutes les 3 secondes au lieu de 5
-          if (newTime % 3 === 0) {
-            ApiService.updateGlobalTime(sessionId, newTime);
-          }
-          return newTime;
-        });
-      }, 1000);
-    } else if (!anyRunning && globalIntervalRef.current) {
-      clearInterval(globalIntervalRef.current);
-      globalIntervalRef.current = null;
+    if (anyRunning) {
+      // Démarrer l'intervalle seulement s'il n'existe pas déjà
+      if (!globalIntervalRef.current) {
+        console.log('Démarrage du timer global');
+        globalIntervalRef.current = setInterval(() => {
+          setGlobalTime((prev) => {
+            const newTime = prev + 1;
+            // Envoyer au serveur toutes les 3 secondes
+            if (newTime % 3 === 0) {
+              ApiService.updateGlobalTime(sessionId, newTime);
+            }
+            return newTime;
+          });
+        }, 1000);
+      }
+    } else {
+      // Arrêter l'intervalle seulement si tous les joueurs sont en pause
+      if (globalIntervalRef.current) {
+        console.log('Arrêt du timer global');
+        clearInterval(globalIntervalRef.current);
+        globalIntervalRef.current = null;
+      }
     }
 
+    // Cleanup à la destruction du composant uniquement
     return () => {
-      if (globalIntervalRef.current) {
-        clearInterval(globalIntervalRef.current);
-      }
+      // Ne pas nettoyer l'intervalle ici pour éviter les arrêts intempestifs
     };
-  }, [players, sessionId]);
+  }, [players.map(p => p.isRunning).join(','), sessionId]); // Dépendance optimisée
 
   // Timers individuels
   useEffect(() => {
