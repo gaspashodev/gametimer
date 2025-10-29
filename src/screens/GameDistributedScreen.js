@@ -18,18 +18,15 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [globalTime, setGlobalTime] = useState(0);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
-  const [sessionStatus, setSessionStatus] = useState('lobby'); // 'lobby' ou 'started'
+  const [sessionStatus, setSessionStatus] = useState('lobby');
   const [connectedPlayers, setConnectedPlayers] = useState([]);
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
-  
   const isMyTurn = mode === 'sequential' && 
                    players[currentPlayerIndex]?.id === myPlayerId;
+  const isCreator = myPlayerId === 0; // Le créateur est toujours le joueur 0
 
-  // ✅ CORRECTION : Un seul interval pour TOUS les joueurs
-  const allTimersIntervalRef = useRef(null);
-  
-  // Refs pour stocker les valeurs locales
+  const playerIntervalRef = useRef(null);
   const playersRef = useRef([]);
 
   useEffect(() => {
@@ -37,21 +34,19 @@ const GameDistributedScreen = ({ route, navigation }) => {
   }, [players]);
 
   useEffect(() => {
-    // Connexion au socket
     const callbacks = {
       onConnect: () => {
         setIsConnected(true);
-        // S'identifier en tant que joueur
         ApiService.joinAsPlayer(sessionId, myPlayerId);
       },
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        // Réconciliation pour éviter d'écraser les chronos locaux
+        // ✅ CORRECTION : Réconciliation améliorée pour éviter le recul du chrono
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
-          // Si un joueur est en cours ET que son temps local est supérieur
-          if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
+          // Pour TOUS les joueurs en cours, privilégier le temps local s'il est supérieur
+          if (localPlayer && serverPlayer.isRunning && localPlayer.isRunning) {
             return {
               ...serverPlayer,
               time: Math.max(localPlayer.time, serverPlayer.time)
@@ -67,41 +62,34 @@ const GameDistributedScreen = ({ route, navigation }) => {
         setSessionStatus(session.status || 'started');
         setConnectedPlayers(session.connectedPlayers || []);
       },
-      // ✅ NOUVEAU : Gérer l'erreur "joueur déjà connecté"
-      onPlayerAlreadyConnected: (playerId) => {
-        // Retourner à l'écran d'accueil
-        navigation.navigate('Home');
-      },
     };
 
     ApiService.connectSocket(sessionId, callbacks);
 
     return () => {
       ApiService.disconnectSocket();
-      if (allTimersIntervalRef.current) clearInterval(allTimersIntervalRef.current);
+      if (playerIntervalRef.current) clearInterval(playerIntervalRef.current);
     };
-  }, [sessionId, myPlayerId, navigation]);
+  }, [sessionId, myPlayerId]);
 
-  // ✅ CORRECTION : Timer global - TOUJOURS la somme des temps de tous les joueurs
+  // Timer global - somme des temps de tous les joueurs
   useEffect(() => {
     const total = players.reduce((sum, player) => sum + player.time, 0);
     setGlobalTime(total);
   }, [players]);
 
-  // ✅ CORRECTION MAJEURE : Timer qui fait tourner TOUS les joueurs actifs localement
+  // Timer du joueur local uniquement
   useEffect(() => {
-    const anyRunning = players.some(p => p.isRunning);
+    const isRunning = myPlayer?.isRunning || false;
     
-    if (anyRunning && !allTimersIntervalRef.current) {
-      // Démarrer l'interval pour TOUS les joueurs
-      allTimersIntervalRef.current = setInterval(() => {
+    if (isRunning && !playerIntervalRef.current) {
+      playerIntervalRef.current = setInterval(() => {
         setPlayers((prev) => {
           return prev.map((p) => {
-            if (p.isRunning) {
+            if (p.id === myPlayerId) {
               const newTime = p.time + 1;
               
-              // Envoyer au serveur toutes les 3 secondes SEULEMENT pour MON joueur
-              if (p.id === myPlayerId && newTime % 3 === 0) {
+              if (newTime % 3 === 0) {
                 ApiService.updateTime(sessionId, myPlayerId, newTime);
               }
               
@@ -111,22 +99,20 @@ const GameDistributedScreen = ({ route, navigation }) => {
           });
         });
       }, 1000);
-    } else if (!anyRunning && allTimersIntervalRef.current) {
-      // Arrêter l'interval si aucun joueur n'est actif
-      clearInterval(allTimersIntervalRef.current);
-      allTimersIntervalRef.current = null;
+    } else if (!isRunning && playerIntervalRef.current) {
+      clearInterval(playerIntervalRef.current);
+      playerIntervalRef.current = null;
     }
 
     return () => {
-      if (allTimersIntervalRef.current) {
-        clearInterval(allTimersIntervalRef.current);
-        allTimersIntervalRef.current = null;
+      if (playerIntervalRef.current) {
+        clearInterval(playerIntervalRef.current);
+        playerIntervalRef.current = null;
       }
     };
-  }, [players, myPlayerId, sessionId]);
+  }, [myPlayer?.isRunning, myPlayerId, sessionId]);
 
   const toggleMyPlayer = () => {
-    // Empêcher le toggle si la partie n'est pas démarrée
     if (sessionStatus !== 'started') {
       Alert.alert('Attention', 'La partie n\'a pas encore commencé !');
       return;
@@ -137,16 +123,66 @@ const GameDistributedScreen = ({ route, navigation }) => {
       return;
     }
     
-    // Envoyer le temps exact avant le toggle (synchrone)
     if (myPlayer && myPlayer.isRunning) {
       ApiService.updateTime(sessionId, myPlayerId, myPlayer.time);
     }
     
-    // Envoyer le temps global
     ApiService.updateGlobalTime(sessionId, globalTime);
-    
-    // Effectuer le toggle IMMÉDIATEMENT
     ApiService.togglePlayer(sessionId, myPlayerId);
+  };
+
+  // ✅ NOUVEAU : Skip un joueur (créateur uniquement)
+  const handleSkipPlayer = () => {
+    if (!isCreator) {
+      Alert.alert('Erreur', 'Seul le créateur peut skip un joueur !');
+      return;
+    }
+    
+    if (mode !== 'sequential') {
+      Alert.alert('Erreur', 'Le skip n\'est disponible qu\'en mode séquentiel !');
+      return;
+    }
+    
+    const currentPlayer = players[currentPlayerIndex];
+    Alert.alert(
+      'Skip Joueur',
+      `Voulez-vous passer le tour de ${currentPlayer?.name} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Skip',
+          style: 'destructive',
+          onPress: () => ApiService.skipPlayer(sessionId, myPlayerId),
+        },
+      ]
+    );
+  };
+
+  // ✅ NOUVEAU : Pause globale (créateur uniquement)
+  const handlePauseAll = () => {
+    if (!isCreator) {
+      Alert.alert('Erreur', 'Seul le créateur peut mettre en pause globale !');
+      return;
+    }
+    
+    ApiService.pauseAll(sessionId);
+  };
+
+  // ✅ NOUVEAU : Reset (créateur uniquement)
+  const handleReset = () => {
+    if (!isCreator) {
+      Alert.alert('Erreur', 'Seul le créateur peut réinitialiser la partie !');
+      return;
+    }
+    
+    Alert.alert('Réinitialiser', 'Voulez-vous vraiment réinitialiser tous les timers ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Réinitialiser',
+        style: 'destructive',
+        onPress: () => ApiService.resetSession(sessionId),
+      },
+    ]);
   };
 
   const handleQuit = () => {
@@ -174,10 +210,9 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   }
 
-  // Écran de lobby - en attente des joueurs
+  // Écran de lobby
   if (sessionStatus === 'lobby') {
     const allConnected = connectedPlayers.length === players.length;
-    const isCreator = myPlayerId === 0; // Le créateur est le premier joueur
 
     return (
       <SafeAreaView style={styles.container}>
@@ -218,7 +253,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                       color={isConnectedPlayer ? '#10B981' : '#9CA3AF'}
                     />
                     <Text style={styles.lobbyPlayerName}>
-                      {player.name} {isMe && '(Vous)'}
+                      {player.name} {isMe && '(Vous)'} {player.id === 0 && '👑'}
                     </Text>
                   </View>
                   <Text style={[
@@ -274,7 +309,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   }
 
-  // Écran de jeu normal
+  // Écran de jeu
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -292,6 +327,38 @@ const GameDistributedScreen = ({ route, navigation }) => {
               <Icon name="exit-to-app" size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
+
+          {/* ✅ NOUVEAU : Contrôles créateur */}
+          {isCreator && (
+            <View style={styles.creatorControls}>
+              <Text style={styles.creatorTitle}>👑 Contrôles Créateur</Text>
+              <View style={styles.creatorButtons}>
+                <TouchableOpacity
+                  style={[styles.creatorButton, styles.creatorButtonWarning]}
+                  onPress={handlePauseAll}
+                >
+                  <Icon name="pause-circle" size={20} color="#fff" />
+                  <Text style={styles.creatorButtonText}>Pause</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.creatorButton, styles.creatorButtonDanger]}
+                  onPress={handleReset}
+                >
+                  <Icon name="refresh" size={20} color="#fff" />
+                  <Text style={styles.creatorButtonText}>Reset</Text>
+                </TouchableOpacity>
+                {mode === 'sequential' && (
+                  <TouchableOpacity
+                    style={[styles.creatorButton, styles.creatorButtonWarning]}
+                    onPress={handleSkipPlayer}
+                  >
+                    <Icon name="skip-next" size={20} color="#fff" />
+                    <Text style={styles.creatorButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
 
           <View style={styles.globalTimeContainer}>
             <Text style={styles.globalTimeLabel}>Temps Total</Text>
@@ -314,7 +381,9 @@ const GameDistributedScreen = ({ route, navigation }) => {
             isMyTurn && !myPlayer.isRunning && styles.myPlayerCardTurn,
           ]}
         >
-          <Text style={styles.myPlayerName}>{myPlayer.name}</Text>
+          <Text style={styles.myPlayerName}>
+            {myPlayer.name} {isCreator && '👑'}
+          </Text>
           <Text style={styles.myPlayerTime}>{formatTime(myPlayer.time)}</Text>
 
           <TouchableOpacity
@@ -349,19 +418,29 @@ const GameDistributedScreen = ({ route, navigation }) => {
           <Text style={styles.sectionTitle}>Autres joueurs</Text>
           {players
             .filter((p) => p.id !== myPlayerId)
-            .map((player) => (
-              <View key={player.id} style={styles.otherPlayerCard}>
-                <View style={styles.otherPlayerInfo}>
-                  <Text style={styles.otherPlayerName}>{player.name}</Text>
-                  {player.isRunning && (
-                    <Icon name="play-circle" size={20} color="#10B981" />
-                  )}
+            .map((player) => {
+              const isPlayerConnected = connectedPlayers.includes(player.id);
+              return (
+                <View key={player.id} style={styles.otherPlayerCard}>
+                  <View style={styles.otherPlayerInfo}>
+                    <Text style={styles.otherPlayerName}>
+                      {player.name} {player.id === 0 && '👑'}
+                    </Text>
+                    <View style={styles.playerStatusBadges}>
+                      {player.isRunning && (
+                        <Icon name="play-circle" size={20} color="#10B981" />
+                      )}
+                      {!isPlayerConnected && (
+                        <Icon name="wifi-off" size={20} color="#EF4444" />
+                      )}
+                    </View>
+                  </View>
+                  <Text style={styles.otherPlayerTime}>
+                    {formatTime(player.time)}
+                  </Text>
                 </View>
-                <Text style={styles.otherPlayerTime}>
-                  {formatTime(player.time)}
-                </Text>
-              </View>
-            ))}
+              );
+            })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -415,6 +494,45 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 8,
+  },
+  // ✅ NOUVEAUX STYLES : Contrôles créateur
+  creatorControls: {
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  creatorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
+    marginBottom: 8,
+  },
+  creatorButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  creatorButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  creatorButtonWarning: {
+    backgroundColor: '#F59E0B',
+  },
+  creatorButtonDanger: {
+    backgroundColor: '#EF4444',
+  },
+  creatorButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   globalTimeContainer: {
     alignItems: 'center',
@@ -537,6 +655,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+  },
+  playerStatusBadges: {
+    flexDirection: 'row',
+    gap: 4,
   },
   otherPlayerName: {
     fontSize: 16,

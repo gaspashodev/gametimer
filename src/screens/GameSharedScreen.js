@@ -5,10 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  ScrollView,
-  TextInput,
-  Alert,
   FlatList,
+  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import ApiService from '../services/ApiService';
@@ -21,14 +19,10 @@ const GameSharedScreen = ({ route, navigation }) => {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
 
-  const globalIntervalRef = useRef(null);
   const playerIntervalsRef = useRef({});
-  
-  // Refs pour stocker les valeurs en temps réel sans déclencher de re-render
   const globalTimeRef = useRef(0);
   const playersRef = useRef([]);
 
-  // Mettre à jour les refs à chaque changement
   useEffect(() => {
     globalTimeRef.current = globalTime;
   }, [globalTime]);
@@ -38,24 +32,15 @@ const GameSharedScreen = ({ route, navigation }) => {
   }, [players]);
 
   useEffect(() => {
-    // Connexion au socket
     const callbacks = {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        const localGlobalTime = globalTimeRef.current;
-        const serverGlobalTime = session.globalTime;
-        const anyRunning = session.players.some(p => p.isRunning);
-        
-        // Logique de réconciliation du temps global
-        // Ne pas synchroniser le globalTime du serveur car il est calculé localement 
-        // comme la somme des temps des joueurs (dans les deux modes)
-        // On laisse le useEffect s'en charger
-        
-        // Pour les joueurs, prendre le MAX pour éviter de revenir en arrière
+        // ✅ CORRECTION : Réconciliation améliorée pour éviter le recul
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
+          // Pour les joueurs en cours, privilégier le temps local s'il est supérieur
           if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
             return { 
               ...serverPlayer, 
@@ -75,19 +60,15 @@ const GameSharedScreen = ({ route, navigation }) => {
 
     return () => {
       ApiService.disconnectSocket();
-      if (globalIntervalRef.current) clearInterval(globalIntervalRef.current);
       Object.values(playerIntervalsRef.current).forEach(clearInterval);
     };
   }, [sessionId]);
 
-  // ✅ CORRECTION : Timer global - TOUJOURS la somme des temps de tous les joueurs
-  // (que ce soit en mode séquentiel ou indépendant)
+  // Timer global = somme des temps de tous les joueurs
   useEffect(() => {
-    // Calculer le temps global comme la somme de tous les temps des joueurs
     const total = players.reduce((sum, player) => sum + player.time, 0);
     setGlobalTime(total);
     
-    // Envoyer au serveur toutes les 3 secondes
     if (total % 3 === 0 && total > 0) {
       ApiService.updateGlobalTime(sessionId, total);
     }
@@ -104,7 +85,6 @@ const GameSharedScreen = ({ route, navigation }) => {
             );
 
             const updatedPlayer = newPlayers.find((p) => p.id === player.id);
-            // Envoyer au serveur toutes les 3 secondes au lieu de 5
             if (updatedPlayer.time % 3 === 0) {
               ApiService.updateTime(sessionId, player.id, updatedPlayer.time);
             }
@@ -125,28 +105,22 @@ const GameSharedScreen = ({ route, navigation }) => {
   }, [players, sessionId]);
 
   const togglePlayer = (playerId) => {
-    // Envoyer les temps exacts AVANT le toggle (synchrone)
     const player = players.find(p => p.id === playerId);
     if (player && player.isRunning) {
       ApiService.updateTime(sessionId, playerId, player.time);
     }
     
-    // Envoyer le temps global (somme de tous les joueurs)
     ApiService.updateGlobalTime(sessionId, globalTime);
-    
-    // Effectuer le toggle IMMÉDIATEMENT
     ApiService.togglePlayer(sessionId, playerId);
   };
 
   const pauseAll = () => {
-    // Envoyer les temps exacts de tous les joueurs en cours (synchrone)
     players.forEach(player => {
       if (player.isRunning) {
         ApiService.updateTime(sessionId, player.id, player.time);
       }
     });
 
-    // Demander au serveur de mettre tous les joueurs en pause IMMÉDIATEMENT
     ApiService.pauseAll(sessionId);
   };
 
@@ -181,16 +155,7 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const renderPlayer = ({ item: player, index }) => {
     const isCurrentTurn = mode === 'sequential' && index === currentPlayerIndex;
-    
-    // Logique d'interaction selon le mode
-    let canInteract;
-    if (mode === 'independent') {
-      // Mode indépendant : tous les joueurs sont toujours cliquables
-      canInteract = true;
-    } else {
-      // Mode séquentiel : seul le joueur actif est cliquable
-      canInteract = isCurrentTurn;
-    }
+    const canInteract = mode === 'independent' || isCurrentTurn;
 
     return (
       <View
@@ -206,7 +171,7 @@ const GameSharedScreen = ({ route, navigation }) => {
           style={[
             styles.playerButton,
             player.isRunning ? styles.pauseButton : styles.playButton,
-            !canInteract && styles.playerButtonDisabled, // ✅ EN DERNIER pour écraser
+            !canInteract && styles.playerButtonDisabled,
           ]}
           onPress={() => togglePlayer(player.id)}
           disabled={!canInteract}
@@ -238,7 +203,6 @@ const GameSharedScreen = ({ route, navigation }) => {
               size={20}
               color={isConnected ? '#10B981' : '#EF4444'}
             />
-            {/* Code discret, utile pour référence */}
             <Text style={styles.joinCodeTextSmall}>Code: {joinCode}</Text>
           </View>
           <View style={styles.headerButtons}>
@@ -309,11 +273,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  joinCodeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4F46E5',
   },
   joinCodeTextSmall: {
     fontSize: 11,

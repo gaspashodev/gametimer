@@ -1,12 +1,9 @@
 import axios from 'axios';
 import io from 'socket.io-client';
-import { Alert } from 'react-native';
 
 // Remplacez par l'URL de votre serveur en production
-// Pour le développement local sur Android, utilisez 10.0.2.2 au lieu de localhost
-// Pour iOS, utilisez l'IP locale de votre machine
 export const API_URL = __DEV__ 
-  ? 'http://192.168.1.32:3001' // Votre IP
+  ? 'http://192.168.1.32:3001'
   : 'https://votre-serveur-production.com';
 
 class ApiService {
@@ -14,7 +11,6 @@ class ApiService {
     this.socket = null;
   }
 
-  // Créer une nouvelle session
   async createSession(mode, numPlayers, displayMode, playerNames) {
     try {
       const response = await axios.post(`${API_URL}/api/sessions`, {
@@ -30,7 +26,6 @@ class ApiService {
     }
   }
 
-  // Rejoindre une session par code
   async joinSession(joinCode) {
     try {
       const response = await axios.get(`${API_URL}/api/sessions/join/${joinCode}`);
@@ -41,7 +36,6 @@ class ApiService {
     }
   }
 
-  // Obtenir les données d'une session
   async getSession(sessionId) {
     try {
       const response = await axios.get(`${API_URL}/api/sessions/${sessionId}`);
@@ -52,7 +46,6 @@ class ApiService {
     }
   }
 
-  // Connexion WebSocket
   connectSocket(sessionId, callbacks) {
     if (this.socket) {
       this.socket.disconnect();
@@ -81,31 +74,6 @@ class ApiService {
       if (callbacks.onSessionUpdate) callbacks.onSessionUpdate(session);
     });
 
-    // ✅ NOUVEAU : Gestion du joueur déjà connecté
-    this.socket.on('player-already-connected', ({ playerId }) => {
-      console.error(`⚠️ Joueur ${playerId} déjà connecté`);
-      Alert.alert(
-        'Joueur déjà connecté',
-        'Ce joueur est déjà dans la partie. Veuillez en choisir un autre.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              this.socket.disconnect();
-              if (callbacks.onPlayerAlreadyConnected) {
-                callbacks.onPlayerAlreadyConnected(playerId);
-              }
-            }
-          }
-        ]
-      );
-    });
-
-    this.socket.on('error', (error) => {
-      console.error('Erreur du serveur:', error);
-      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
-    });
-
     this.socket.on('connect_error', (error) => {
       console.error('Erreur de connexion socket:', error);
     });
@@ -113,21 +81,18 @@ class ApiService {
     return this.socket;
   }
 
-  // Nouveau : Se connecter en tant que joueur spécifique
   joinAsPlayer(sessionId, playerId) {
     if (this.socket) {
       this.socket.emit('join-as-player', { sessionId, playerId });
     }
   }
 
-  // Nouveau : Démarrer la partie (pour le créateur en mode distribué)
   startGame(sessionId) {
     if (this.socket) {
       this.socket.emit('start-game', sessionId);
     }
   }
 
-  // Déconnecter le socket
   disconnectSocket() {
     if (this.socket) {
       this.socket.disconnect();
@@ -135,45 +100,46 @@ class ApiService {
     }
   }
 
-  // Basculer un joueur
   togglePlayer(sessionId, playerId) {
     if (this.socket) {
       this.socket.emit('toggle-player', { sessionId, playerId });
     }
   }
 
-  // Mettre à jour le temps d'un joueur
   updateTime(sessionId, playerId, time) {
     if (this.socket) {
       this.socket.emit('update-time', { sessionId, playerId, time });
     }
   }
 
-  // Mettre à jour le temps global
   updateGlobalTime(sessionId, globalTime) {
     if (this.socket) {
       this.socket.emit('update-global-time', { sessionId, globalTime });
     }
   }
 
-  // Réinitialiser la session
   resetSession(sessionId) {
     if (this.socket) {
       this.socket.emit('reset-session', sessionId);
     }
   }
 
-  // Mettre en pause tous les joueurs
   pauseAll(sessionId) {
     if (this.socket) {
       this.socket.emit('pause-all', sessionId);
     }
   }
 
-  // Mettre à jour le nom d'un joueur
   updatePlayerName(sessionId, playerId, name) {
     if (this.socket) {
       this.socket.emit('update-player-name', { sessionId, playerId, name });
+    }
+  }
+
+  // ✅ NOUVEAU : Skip un joueur (créateur uniquement, mode séquentiel)
+  skipPlayer(sessionId, requesterId) {
+    if (this.socket) {
+      this.socket.emit('skip-player', { sessionId, requesterId });
     }
   }
 }
