@@ -51,6 +51,13 @@ const JoinScreen = ({ navigation }) => {
       return;
     }
 
+    // ✅ AMÉLIORATION : Vérifier une dernière fois avant de naviguer
+    const isAlreadyConnected = sessionData.session.connectedPlayers?.includes(selectedPlayer);
+    if (isAlreadyConnected) {
+      Alert.alert('Erreur', 'Ce joueur est déjà connecté. Veuillez en choisir un autre.');
+      return;
+    }
+
     navigation.navigate('GameDistributed', {
       sessionId: sessionData.sessionId,
       joinCode: joinCode,
@@ -69,30 +76,42 @@ const JoinScreen = ({ navigation }) => {
           </Text>
 
           <View style={styles.playersContainer}>
-            {sessionData.session.players.map((player) => (
-              <TouchableOpacity
-                key={player.id}
-                style={[
-                  styles.playerButton,
-                  selectedPlayer === player.id && styles.playerButtonActive,
-                ]}
-                onPress={() => setSelectedPlayer(player.id)}
-              >
-                <Icon
-                  name="account"
-                  size={32}
-                  color={selectedPlayer === player.id ? '#fff' : '#4F46E5'}
-                />
-                <Text
+            {sessionData.session.players.map((player) => {
+              const isAlreadyConnected = sessionData.session.connectedPlayers?.includes(player.id);
+              const isSelected = selectedPlayer === player.id;
+              
+              return (
+                <TouchableOpacity
+                  key={player.id}
                   style={[
-                    styles.playerButtonText,
-                    selectedPlayer === player.id && styles.playerButtonTextActive,
+                    styles.playerButton,
+                    isSelected && styles.playerButtonActive,
+                    isAlreadyConnected && styles.playerButtonDisabled,
                   ]}
+                  onPress={() => !isAlreadyConnected && setSelectedPlayer(player.id)}
+                  disabled={isAlreadyConnected}
                 >
-                  {player.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Icon
+                    name={isAlreadyConnected ? "account-check" : "account"}
+                    size={32}
+                    color={
+                      isAlreadyConnected ? '#9CA3AF' : 
+                      isSelected ? '#fff' : '#4F46E5'
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.playerButtonText,
+                      isSelected && styles.playerButtonTextActive,
+                      isAlreadyConnected && styles.playerButtonTextDisabled,
+                    ]}
+                  >
+                    {player.name}
+                    {isAlreadyConnected && ' (Occupé)'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <TouchableOpacity
@@ -238,6 +257,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#4F46E5',
     borderColor: '#4F46E5',
   },
+  playerButtonDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+    opacity: 0.6,
+  },
   playerButtonText: {
     fontSize: 18,
     fontWeight: '600',
@@ -245,6 +269,9 @@ const styles = StyleSheet.create({
   },
   playerButtonTextActive: {
     color: '#fff',
+  },
+  playerButtonTextDisabled: {
+    color: '#9CA3AF',
   },
   confirmButton: {
     width: '100%',

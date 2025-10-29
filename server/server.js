@@ -118,22 +118,36 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Nouveau : Un joueur rejoint avec son ID
+  // ✅ AMÉLIORATION : Validation du joueur déjà connecté
   socket.on('join-as-player', ({ sessionId, playerId }) => {
     const session = gameSessions.get(sessionId);
-    if (!session) return;
+    if (!session) {
+      socket.emit('error', { message: 'Session non trouvée' });
+      return;
+    }
+
+    // Vérifier si le joueur existe
+    if (!session.players.find(p => p.id === playerId)) {
+      socket.emit('error', { message: 'Joueur non valide' });
+      return;
+    }
+
+    // ✅ CORRECTION : Vérifier si le joueur est déjà connecté
+    if (session.connectedPlayers.includes(playerId)) {
+      console.log(`⚠️ Joueur ${playerId} déjà connecté à la session ${sessionId}`);
+      socket.emit('player-already-connected', { playerId });
+      return;
+    }
 
     // Stocker l'association socket <-> joueur
     socket.data = { sessionId, playerId };
 
-    // Ajouter à la liste des joueurs connectés s'il n'y est pas déjà
-    if (!session.connectedPlayers.includes(playerId)) {
-      session.connectedPlayers.push(playerId);
-      console.log(`Joueur ${playerId} connecté à la session ${sessionId}`);
-      
-      // Notifier tous les clients
-      io.to(sessionId).emit('session-state', session);
-    }
+    // Ajouter à la liste des joueurs connectés
+    session.connectedPlayers.push(playerId);
+    console.log(`✅ Joueur ${playerId} connecté à la session ${sessionId}`);
+    
+    // Notifier tous les clients
+    io.to(sessionId).emit('session-state', session);
   });
 
   // Nouveau : Démarrer la partie (seulement en mode distribué)
@@ -188,42 +202,6 @@ io.on('connection', (socket) => {
     
     // Émettre immédiatement la mise à jour
     io.to(sessionId).emit('session-state', session);
-  });
-
-  // ✅ NOUVEAU : Passer au joueur suivant (pour le créateur)
-  socket.on('skip-player', ({ sessionId, requesterId }) => {
-    const session = gameSessions.get(sessionId);
-    if (!session) return;
-
-    // Vérifier que c'est le créateur qui demande
-    const isCreator = requesterId === 0;
-    
-    if (!isCreator) {
-      console.log(`Skip refusé : seul le créateur peut skip (requester: ${requesterId})`);
-      return;
-    }
-
-    if (session.mode === 'sequential') {
-      // Arrêter le joueur actuel
-      const currentPlayer = session.players[session.currentPlayerIndex];
-      if (currentPlayer) {
-        currentPlayer.isRunning = false;
-      }
-
-      // Passer au suivant
-      session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
-      
-      // Démarrer le nouveau joueur actif
-      const nextPlayer = session.players[session.currentPlayerIndex];
-      if (nextPlayer) {
-        nextPlayer.isRunning = true;
-      }
-
-      session.lastUpdate = new Date();
-      console.log(`✅ Joueur skippé dans la session ${sessionId}, passage à ${nextPlayer?.name}`);
-      
-      io.to(sessionId).emit('session-state', session);
-    }
   });
 
   socket.on('update-time', ({ sessionId, playerId, time }) => {

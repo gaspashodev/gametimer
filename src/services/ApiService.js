@@ -1,5 +1,6 @@
 import axios from 'axios';
 import io from 'socket.io-client';
+import { Alert } from 'react-native';
 
 // Remplacez par l'URL de votre serveur en production
 // Pour le développement local sur Android, utilisez 10.0.2.2 au lieu de localhost
@@ -80,6 +81,31 @@ class ApiService {
       if (callbacks.onSessionUpdate) callbacks.onSessionUpdate(session);
     });
 
+    // ✅ NOUVEAU : Gestion du joueur déjà connecté
+    this.socket.on('player-already-connected', ({ playerId }) => {
+      console.error(`⚠️ Joueur ${playerId} déjà connecté`);
+      Alert.alert(
+        'Joueur déjà connecté',
+        'Ce joueur est déjà dans la partie. Veuillez en choisir un autre.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              this.socket.disconnect();
+              if (callbacks.onPlayerAlreadyConnected) {
+                callbacks.onPlayerAlreadyConnected(playerId);
+              }
+            }
+          }
+        ]
+      );
+    });
+
+    this.socket.on('error', (error) => {
+      console.error('Erreur du serveur:', error);
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
+    });
+
     this.socket.on('connect_error', (error) => {
       console.error('Erreur de connexion socket:', error);
     });
@@ -113,14 +139,6 @@ class ApiService {
   togglePlayer(sessionId, playerId) {
     if (this.socket) {
       this.socket.emit('toggle-player', { sessionId, playerId });
-    }
-  }
-
-  // ✅ NOUVEAU : Passer au joueur suivant (pour le créateur)
-  skipPlayer(sessionId, requesterId) {
-    if (this.socket) {
-      console.log(`🚀 Envoi de skip-player pour la session ${sessionId} par le joueur ${requesterId}`);
-      this.socket.emit('skip-player', { sessionId, requesterId });
     }
   }
 
