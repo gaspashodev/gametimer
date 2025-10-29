@@ -87,6 +87,20 @@ class ApiService {
     return this.socket;
   }
 
+  // Nouveau : Se connecter en tant que joueur spécifique
+  joinAsPlayer(sessionId, playerId) {
+    if (this.socket) {
+      this.socket.emit('join-as-player', { sessionId, playerId });
+    }
+  }
+
+  // Nouveau : Démarrer la partie (pour le créateur en mode distribué)
+  startGame(sessionId) {
+    if (this.socket) {
+      this.socket.emit('start-game', sessionId);
+    }
+  }
+
   // Déconnecter le socket
   disconnectSocket() {
     if (this.socket) {

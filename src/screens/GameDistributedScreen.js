@@ -18,6 +18,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [globalTime, setGlobalTime] = useState(0);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState('lobby'); // 'lobby' ou 'started'
+  const [connectedPlayers, setConnectedPlayers] = useState([]);
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
   
@@ -37,7 +39,11 @@ const GameDistributedScreen = ({ route, navigation }) => {
   useEffect(() => {
     // Connexion au socket
     const callbacks = {
-      onConnect: () => setIsConnected(true),
+      onConnect: () => {
+        setIsConnected(true);
+        // S'identifier en tant que joueur
+        ApiService.joinAsPlayer(sessionId, myPlayerId);
+      },
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
         // ✅ CORRECTION : Réconciliation pour éviter d'écraser le chrono local
@@ -61,6 +67,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
         setPlayers(updatedPlayers);
         setGlobalTime(session.globalTime);
         setCurrentPlayerIndex(session.currentPlayerIndex);
+        setSessionStatus(session.status || 'started');
+        setConnectedPlayers(session.connectedPlayers || []);
       },
     };
 
@@ -116,6 +124,12 @@ const GameDistributedScreen = ({ route, navigation }) => {
   }, [myPlayer?.isRunning, myPlayerId, sessionId]); // ✅ Dépendances minimales
 
   const toggleMyPlayer = () => {
+    // Empêcher le toggle si la partie n'est pas démarrée
+    if (sessionStatus !== 'started') {
+      Alert.alert('Attention', 'La partie n\'a pas encore commencé !');
+      return;
+    }
+    
     if (mode === 'sequential' && !isMyTurn) {
       Alert.alert('Attention', "Ce n'est pas votre tour !");
       return;
@@ -160,6 +174,107 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   }
 
+  // Écran de lobby - en attente des joueurs
+  if (sessionStatus === 'lobby') {
+    const allConnected = connectedPlayers.length === players.length;
+    const isCreator = myPlayerId === 0; // Le créateur est le premier joueur
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.lobbyContent}>
+          <View style={styles.lobbyHeader}>
+            <Icon name="account-group" size={60} color="#4F46E5" />
+            <Text style={styles.lobbyTitle}>Salle d'Attente</Text>
+            <Text style={styles.lobbySubtitle}>Code de la partie</Text>
+            <Text style={styles.lobbyCode}>{joinCode}</Text>
+            
+            <View style={styles.connectionBadge}>
+              <Icon
+                name={isConnected ? 'wifi' : 'wifi-off'}
+                size={16}
+                color={isConnected ? '#10B981' : '#EF4444'}
+              />
+              <Text style={styles.connectionText}>
+                {isConnected ? 'Connecté' : 'Déconnecté'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.playersStatusContainer}>
+            <Text style={styles.playersStatusTitle}>
+              Joueurs : {connectedPlayers.length}/{players.length}
+            </Text>
+            
+            {players.map((player) => {
+              const isConnectedPlayer = connectedPlayers.includes(player.id);
+              const isMe = player.id === myPlayerId;
+              
+              return (
+                <View key={player.id} style={styles.lobbyPlayerCard}>
+                  <View style={styles.lobbyPlayerInfo}>
+                    <Icon
+                      name={isConnectedPlayer ? 'check-circle' : 'clock-outline'}
+                      size={24}
+                      color={isConnectedPlayer ? '#10B981' : '#9CA3AF'}
+                    />
+                    <Text style={styles.lobbyPlayerName}>
+                      {player.name} {isMe && '(Vous)'}
+                    </Text>
+                  </View>
+                  <Text style={[
+                    styles.lobbyPlayerStatus,
+                    isConnectedPlayer && styles.lobbyPlayerStatusConnected
+                  ]}>
+                    {isConnectedPlayer ? 'Connecté' : 'En attente...'}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {allConnected && (
+            <View style={styles.readyBanner}>
+              <Icon name="check-circle" size={24} color="#10B981" />
+              <Text style={styles.readyText}>Tous les joueurs sont prêts !</Text>
+            </View>
+          )}
+
+          {isCreator && (
+            <TouchableOpacity
+              style={[
+                styles.startButton,
+                !allConnected && styles.startButtonWarning
+              ]}
+              onPress={() => ApiService.startGame(sessionId)}
+            >
+              <Icon name="play-circle" size={28} color="#fff" />
+              <Text style={styles.startButtonText}>
+                {allConnected ? 'Démarrer la Partie' : 'Démarrer Quand Même'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!isCreator && (
+            <View style={styles.waitingMessage}>
+              <Icon name="clock-outline" size={24} color="#6B7280" />
+              <Text style={styles.waitingText}>
+                En attente du lancement par {players[0]?.name}...
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.lobbyBackButton}
+            onPress={handleQuit}
+          >
+            <Text style={styles.lobbyBackButtonText}>Quitter</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Écran de jeu normal
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -433,6 +548,163 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F2937',
     fontFamily: 'monospace',
+  },
+  // Styles du lobby
+  lobbyContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  lobbyHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+    backgroundColor: '#fff',
+    padding: 24,
+    borderRadius: 16,
+    width: '100%',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  lobbyTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginTop: 16,
+  },
+  lobbySubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 16,
+  },
+  lobbyCode: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#4F46E5',
+    letterSpacing: 4,
+    marginTop: 8,
+  },
+  connectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+  },
+  connectionText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  playersStatusContainer: {
+    width: '100%',
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  playersStatusTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  lobbyPlayerCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  lobbyPlayerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  lobbyPlayerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  lobbyPlayerStatus: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  lobbyPlayerStatusConnected: {
+    color: '#10B981',
+    fontWeight: '500',
+  },
+  readyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#D1FAE5',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    width: '100%',
+  },
+  readyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  startButton: {
+    width: '100%',
+    backgroundColor: '#10B981',
+    padding: 18,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  startButtonWarning: {
+    backgroundColor: '#F59E0B',
+  },
+  startButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  waitingMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    width: '100%',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  lobbyBackButton: {
+    marginTop: 20,
+    padding: 12,
+  },
+  lobbyBackButtonText: {
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

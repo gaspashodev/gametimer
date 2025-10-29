@@ -242,7 +242,8 @@ const GameSharedScreen = ({ route, navigation }) => {
               size={20}
               color={isConnected ? '#10B981' : '#EF4444'}
             />
-            <Text style={styles.joinCodeText}>Code: {joinCode}</Text>
+            {/* Code discret, utile pour référence */}
+            <Text style={styles.joinCodeTextSmall}>Code: {joinCode}</Text>
           </View>
           <View style={styles.headerButtons}>
             {players.some(p => p.isRunning) && (
@@ -317,6 +318,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#4F46E5',
+  },
+  joinCodeTextSmall: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#9CA3AF',
   },
   headerButtons: {
     flexDirection: 'row',

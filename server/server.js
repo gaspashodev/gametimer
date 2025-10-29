@@ -38,6 +38,8 @@ app.post('/api/sessions', (req, res) => {
     players,
     currentPlayerIndex: 0,
     globalTime: 0,
+    status: displayMode === 'distributed' ? 'lobby' : 'started', // 'lobby' ou 'started'
+    connectedPlayers: [], // Liste des IDs de joueurs connectés
     createdAt: new Date(),
     lastUpdate: new Date(),
   };
@@ -116,9 +118,45 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Nouveau : Un joueur rejoint avec son ID
+  socket.on('join-as-player', ({ sessionId, playerId }) => {
+    const session = gameSessions.get(sessionId);
+    if (!session) return;
+
+    // Stocker l'association socket <-> joueur
+    socket.data = { sessionId, playerId };
+
+    // Ajouter à la liste des joueurs connectés s'il n'y est pas déjà
+    if (!session.connectedPlayers.includes(playerId)) {
+      session.connectedPlayers.push(playerId);
+      console.log(`Joueur ${playerId} connecté à la session ${sessionId}`);
+      
+      // Notifier tous les clients
+      io.to(sessionId).emit('session-state', session);
+    }
+  });
+
+  // Nouveau : Démarrer la partie (seulement en mode distribué)
+  socket.on('start-game', (sessionId) => {
+    const session = gameSessions.get(sessionId);
+    if (!session) return;
+
+    if (session.displayMode === 'distributed' && session.status === 'lobby') {
+      session.status = 'started';
+      console.log(`Partie ${sessionId} démarrée`);
+      io.to(sessionId).emit('session-state', session);
+    }
+  });
+
   socket.on('toggle-player', ({ sessionId, playerId }) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
+
+    // En mode distribué, ne pas permettre de toggle si la partie n'est pas démarrée
+    if (session.displayMode === 'distributed' && session.status !== 'started') {
+      console.log(`Toggle refusé : partie ${sessionId} pas encore démarrée`);
+      return;
+    }
 
     if (session.mode === 'sequential') {
       // Mode séquentiel : seul le joueur actif peut être togglé
@@ -228,6 +266,21 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Client déconnecté:', socket.id);
+    
+    // Si le socket avait un joueur associé, le retirer de la liste
+    if (socket.data?.sessionId && socket.data?.playerId !== undefined) {
+      const session = gameSessions.get(socket.data.sessionId);
+      if (session) {
+        const index = session.connectedPlayers.indexOf(socket.data.playerId);
+        if (index > -1) {
+          session.connectedPlayers.splice(index, 1);
+          console.log(`Joueur ${socket.data.playerId} déconnecté de la session ${socket.data.sessionId}`);
+          
+          // Notifier les autres clients
+          io.to(socket.data.sessionId).emit('session-state', session);
+        }
+      }
+    }
   });
 });
 
