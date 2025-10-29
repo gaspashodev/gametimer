@@ -135,7 +135,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
       return;
     }
     
-    // Envoyer le temps exact avant le toggle
+    // Envoyer le temps exact avant le toggle (synchrone)
     if (myPlayer && myPlayer.isRunning) {
       ApiService.updateTime(sessionId, myPlayerId, myPlayer.time);
     }
@@ -143,10 +143,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
     // Envoyer le temps global
     ApiService.updateGlobalTime(sessionId, globalTime);
     
-    // Effectuer le toggle
-    setTimeout(() => {
-      ApiService.togglePlayer(sessionId, myPlayerId);
-    }, 50);
+    // Effectuer le toggle IMMÉDIATEMENT
+    ApiService.togglePlayer(sessionId, myPlayerId);
   };
 
   const handleQuit = () => {

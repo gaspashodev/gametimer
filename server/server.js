@@ -186,11 +186,8 @@ io.on('connection', (socket) => {
 
     session.lastUpdate = new Date();
     
-    // IMPORTANT : Attendre un peu avant d'émettre pour laisser le temps 
-    // aux autres événements (update-time, update-global-time) d'arriver
-    setTimeout(() => {
-      io.to(sessionId).emit('session-state', session);
-    }, 100);
+    // Émettre immédiatement la mise à jour
+    io.to(sessionId).emit('session-state', session);
   });
 
   socket.on('update-time', ({ sessionId, playerId, time }) => {

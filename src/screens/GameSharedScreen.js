@@ -125,7 +125,7 @@ const GameSharedScreen = ({ route, navigation }) => {
   }, [players, sessionId]);
 
   const togglePlayer = (playerId) => {
-    // Envoyer les temps exacts AVANT le toggle
+    // Envoyer les temps exacts AVANT le toggle (synchrone)
     const player = players.find(p => p.id === playerId);
     if (player && player.isRunning) {
       ApiService.updateTime(sessionId, playerId, player.time);
@@ -134,24 +134,20 @@ const GameSharedScreen = ({ route, navigation }) => {
     // Envoyer le temps global (somme de tous les joueurs)
     ApiService.updateGlobalTime(sessionId, globalTime);
     
-    // Effectuer le toggle
-    setTimeout(() => {
-      ApiService.togglePlayer(sessionId, playerId);
-    }, 50);
+    // Effectuer le toggle IMMÉDIATEMENT
+    ApiService.togglePlayer(sessionId, playerId);
   };
 
   const pauseAll = () => {
-    // Envoyer les temps exacts de tous les joueurs en cours
+    // Envoyer les temps exacts de tous les joueurs en cours (synchrone)
     players.forEach(player => {
       if (player.isRunning) {
         ApiService.updateTime(sessionId, player.id, player.time);
       }
     });
 
-    // Demander au serveur de mettre tous les joueurs en pause
-    setTimeout(() => {
-      ApiService.pauseAll(sessionId);
-    }, 50);
+    // Demander au serveur de mettre tous les joueurs en pause IMMÉDIATEMENT
+    ApiService.pauseAll(sessionId);
   };
 
   const handleReset = () => {
