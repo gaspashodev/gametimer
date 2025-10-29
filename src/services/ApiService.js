@@ -116,6 +116,14 @@ class ApiService {
     }
   }
 
+  // ✅ NOUVEAU : Passer au joueur suivant (pour le créateur)
+  skipPlayer(sessionId, requesterId) {
+    if (this.socket) {
+      console.log(`🚀 Envoi de skip-player pour la session ${sessionId} par le joueur ${requesterId}`);
+      this.socket.emit('skip-player', { sessionId, requesterId });
+    }
+  }
+
   // Mettre à jour le temps d'un joueur
   updateTime(sessionId, playerId, time) {
     if (this.socket) {

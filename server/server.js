@@ -190,6 +190,42 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('session-state', session);
   });
 
+  // ✅ NOUVEAU : Passer au joueur suivant (pour le créateur)
+  socket.on('skip-player', ({ sessionId, requesterId }) => {
+    const session = gameSessions.get(sessionId);
+    if (!session) return;
+
+    // Vérifier que c'est le créateur qui demande
+    const isCreator = requesterId === 0;
+    
+    if (!isCreator) {
+      console.log(`Skip refusé : seul le créateur peut skip (requester: ${requesterId})`);
+      return;
+    }
+
+    if (session.mode === 'sequential') {
+      // Arrêter le joueur actuel
+      const currentPlayer = session.players[session.currentPlayerIndex];
+      if (currentPlayer) {
+        currentPlayer.isRunning = false;
+      }
+
+      // Passer au suivant
+      session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
+      
+      // Démarrer le nouveau joueur actif
+      const nextPlayer = session.players[session.currentPlayerIndex];
+      if (nextPlayer) {
+        nextPlayer.isRunning = true;
+      }
+
+      session.lastUpdate = new Date();
+      console.log(`✅ Joueur skippé dans la session ${sessionId}, passage à ${nextPlayer?.name}`);
+      
+      io.to(sessionId).emit('session-state', session);
+    }
+  });
+
   socket.on('update-time', ({ sessionId, playerId, time }) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
