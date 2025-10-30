@@ -5,13 +5,15 @@ import io from 'socket.io-client';
 // Pour le développement local sur Android, utilisez 10.0.2.2 au lieu de localhost
 // Pour iOS, utilisez l'IP locale de votre machine
 export const API_URL = __DEV__ 
-  ? 'http://192.168.1.32:3001' // Votre IP
-  : 'https://votre-serveur-production.com';
+  ? 'http://192.168.1.32:3001' // Votre IP locale pour dev
+  : 'game-timer-backend-production.up.railway.app'; // ✅ URL Railway en production
 
 class ApiService {
   constructor() {
     this.socket = null;
   }
+
+  // ===== GESTION DES SESSIONS =====
 
   // Créer une nouvelle session
   async createSession(mode, numPlayers, displayMode, playerNames) {
@@ -50,6 +52,54 @@ class ApiService {
       throw error;
     }
   }
+
+  // ✅ NOUVEAU : Obtenir toutes les sessions actives
+  async getAllSessions() {
+    try {
+      const response = await axios.get(`${API_URL}/api/sessions`);
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des sessions:', error);
+      throw error;
+    }
+  }
+
+  // ===== STATS & ANALYTICS =====
+
+  // ✅ NOUVEAU : Récupérer les stats complètes d'une partie
+  async getPartyStats(sessionId) {
+    try {
+      const response = await axios.get(`${API_URL}/api/party/${sessionId}/stats`);
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des stats:', error);
+      throw error;
+    }
+  }
+
+  // ✅ NOUVEAU : Récupérer le temps d'un joueur spécifique
+  async getPlayerTime(sessionId, playerId) {
+    try {
+      const response = await axios.get(`${API_URL}/api/party/${sessionId}/player/${playerId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération du temps joueur:', error);
+      throw error;
+    }
+  }
+
+  // ✅ NOUVEAU : Récupérer les données stream (format simplifié pour OBS/overlay)
+  async getStreamData(sessionId) {
+    try {
+      const response = await axios.get(`${API_URL}/api/stream/${sessionId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des données stream:', error);
+      throw error;
+    }
+  }
+
+  // ===== WEBSOCKET =====
 
   // Connexion WebSocket
   connectSocket(sessionId, callbacks) {
@@ -109,6 +159,8 @@ class ApiService {
     }
   }
 
+  // ===== ACTIONS DE JEU =====
+
   // Basculer un joueur
   togglePlayer(sessionId, playerId) {
     if (this.socket) {
@@ -151,7 +203,7 @@ class ApiService {
     }
   }
 
-  // ✅ Skip un joueur (créateur uniquement, mode séquentiel)
+  // Skip un joueur (créateur uniquement, mode séquentiel)
   skipPlayer(sessionId, requesterId) {
     if (this.socket) {
       this.socket.emit('skip-player', { sessionId, requesterId });

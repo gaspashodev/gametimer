@@ -7,6 +7,7 @@ import ConfigScreen from './src/screens/ConfigScreen';
 import JoinScreen from './src/screens/JoinScreen';
 import GameSharedScreen from './src/screens/GameSharedScreen';
 import GameDistributedScreen from './src/screens/GameDistributedScreen';
+import PartyStatsScreen from './src/screens/PartyStatsScreen';
 
 const Stack = createStackNavigator();
 
@@ -51,6 +52,11 @@ export default function App() {
             name="GameDistributed" 
             component={GameDistributedScreen}
             options={{ title: 'Ma Partie', headerLeft: null }}
+          />
+          <Stack.Screen 
+            name="PartyStats" 
+            component={PartyStatsScreen}
+            options={{ title: 'Statistiques' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

@@ -217,6 +217,12 @@ const GameSharedScreen = ({ route, navigation }) => {
             <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
               <Icon name="refresh" size={24} color="#EF4444" />
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.iconButton} 
+              onPress={() => navigation.navigate('PartyStats', { sessionId })}
+            >
+              <Icon name="chart-bar" size={24} color="#4F46E5" />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
               <Icon name="exit-to-app" size={24} color="#6B7280" />
             </TouchableOpacity>
@@ -322,7 +328,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   playerCard: {
-    flex: 1,
+    width:'48%',
     backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,

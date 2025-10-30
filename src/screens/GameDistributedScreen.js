@@ -114,7 +114,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
     };
   }, [myPlayer?.isRunning, myPlayerId, sessionId]);
 
-  // ✅ NOUVEAU : Timer pour les autres joueurs en cours
   useEffect(() => {
     const hasOtherRunning = players.some(p => p.id !== myPlayerId && p.isRunning);
     
@@ -380,6 +379,12 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               )}
               {/* ✅ Bouton Quitter - toujours visible */}
+              <TouchableOpacity 
+                style={styles.iconButton} 
+                onPress={() => navigation.navigate('PartyStats', { sessionId })}
+              >
+                <Icon name="chart-bar" size={24} color="#4F46E5" />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
                 <Icon name="exit-to-app" size={24} color="#6B7280" />
               </TouchableOpacity>

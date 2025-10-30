@@ -19,6 +19,30 @@ app.use(express.json());
 // Stockage des sessions de jeu en mémoire
 const gameSessions = new Map();
 
+// ===== HELPER FUNCTIONS =====
+
+function formatTime(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hrs > 0) {
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// ===== API ROUTES =====
+
+// Health check (pour UptimeRobot ou monitoring)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date(),
+    activeSessions: gameSessions.size
+  });
+});
+
 // Créer une nouvelle session de jeu
 app.post('/api/sessions', (req, res) => {
   const { mode, numPlayers, displayMode, playerNames } = req.body;
@@ -78,7 +102,7 @@ app.get('/api/sessions/join/:joinCode', (req, res) => {
   res.status(404).json({ error: 'Session non trouvée' });
 });
 
-// API pour streamers - Obtenir les données d'une session
+// ✅ NOUVEAU : API pour streamers - Format simplifié
 app.get('/api/stream/:sessionId', (req, res) => {
   const { sessionId } = req.params;
   const session = gameSessions.get(sessionId);
@@ -91,10 +115,15 @@ app.get('/api/stream/:sessionId', (req, res) => {
   const streamData = {
     mode: session.mode,
     globalTime: session.globalTime,
+    globalTimeFormatted: formatTime(session.globalTime),
     players: session.players.map(p => ({
       name: p.name,
       time: p.time,
-      isActive: p.isRunning
+      timeFormatted: formatTime(p.time),
+      isActive: p.isRunning,
+      percentageOfTotal: session.globalTime > 0 
+        ? Math.round((p.time / session.globalTime) * 100) 
+        : 0
     })),
     currentPlayer: session.mode === 'sequential' 
       ? session.players[session.currentPlayerIndex]?.name 
@@ -104,7 +133,138 @@ app.get('/api/stream/:sessionId', (req, res) => {
   res.json(streamData);
 });
 
-// WebSocket pour synchronisation en temps réel
+// ✅ NOUVEAU : Stats complètes d'une partie
+app.get('/api/party/:sessionId/stats', (req, res) => {
+  const { sessionId } = req.params;
+  const session = gameSessions.get(sessionId);
+  
+  if (!session) {
+    return res.status(404).json({ error: 'Session non trouvée' });
+  }
+
+  // Calcul des stats avancées
+  const totalTime = session.globalTime;
+  const activePlayers = session.players.filter(p => p.time > 0);
+  const averageTime = activePlayers.length > 0 
+    ? Math.round(totalTime / activePlayers.length) 
+    : 0;
+  
+  // Tri des joueurs par temps décroissant
+  const sortedPlayers = [...session.players].sort((a, b) => b.time - a.time);
+
+  const stats = {
+    sessionId: session.id,
+    joinCode: session.id.substring(0, 6).toUpperCase(),
+    mode: session.mode,
+    displayMode: session.displayMode,
+    status: session.status,
+    
+    // Temps
+    globalTime: session.globalTime,
+    globalTimeFormatted: formatTime(session.globalTime),
+    averageTime: averageTime,
+    averageTimeFormatted: formatTime(averageTime),
+    
+    // Dates
+    createdAt: session.createdAt,
+    lastUpdate: session.lastUpdate,
+    duration: Math.floor((new Date() - session.createdAt) / 1000), // Durée totale de la session en secondes
+    
+    // Joueurs
+    totalPlayers: session.players.length,
+    connectedPlayers: session.connectedPlayers.length,
+    activePlayers: session.players.filter(p => p.isRunning).length,
+    
+    players: session.players.map(p => ({
+      id: p.id,
+      name: p.name,
+      time: p.time,
+      timeFormatted: formatTime(p.time),
+      isRunning: p.isRunning,
+      isConnected: session.connectedPlayers.includes(p.id),
+      percentageOfTotal: totalTime > 0 
+        ? Math.round((p.time / totalTime) * 100) 
+        : 0,
+      rank: sortedPlayers.findIndex(sp => sp.id === p.id) + 1
+    })),
+    
+    // Classement
+    ranking: sortedPlayers.map((p, index) => ({
+      rank: index + 1,
+      name: p.name,
+      time: p.time,
+      timeFormatted: formatTime(p.time),
+      percentageOfTotal: totalTime > 0 
+        ? Math.round((p.time / totalTime) * 100) 
+        : 0
+    })),
+    
+    currentPlayerIndex: session.currentPlayerIndex,
+    currentPlayerName: session.players[session.currentPlayerIndex]?.name
+  };
+
+  res.json(stats);
+});
+
+// ✅ NOUVEAU : Temps d'un joueur spécifique
+app.get('/api/party/:sessionId/player/:playerId', (req, res) => {
+  const { sessionId, playerId } = req.params;
+  const session = gameSessions.get(sessionId);
+  
+  if (!session) {
+    return res.status(404).json({ error: 'Session non trouvée' });
+  }
+
+  const player = session.players.find(p => p.id === parseInt(playerId));
+  
+  if (!player) {
+    return res.status(404).json({ error: 'Joueur non trouvé' });
+  }
+
+  // Calcul du rang
+  const sortedPlayers = [...session.players].sort((a, b) => b.time - a.time);
+  const rank = sortedPlayers.findIndex(p => p.id === player.id) + 1;
+
+  res.json({
+    playerId: player.id,
+    name: player.name,
+    time: player.time,
+    timeFormatted: formatTime(player.time),
+    isRunning: player.isRunning,
+    isConnected: session.connectedPlayers.includes(player.id),
+    percentageOfTotal: session.globalTime > 0 
+      ? Math.round((player.time / session.globalTime) * 100) 
+      : 0,
+    rank: rank,
+    totalPlayers: session.players.length,
+    isCurrent: session.mode === 'sequential' && 
+               session.currentPlayerIndex === player.id
+  });
+});
+
+// ✅ NOUVEAU : Liste de toutes les sessions actives (utile pour admin)
+app.get('/api/sessions', (req, res) => {
+  const sessions = Array.from(gameSessions.values()).map(session => ({
+    sessionId: session.id,
+    joinCode: session.id.substring(0, 6).toUpperCase(),
+    mode: session.mode,
+    displayMode: session.displayMode,
+    status: session.status,
+    playerCount: session.players.length,
+    connectedPlayers: session.connectedPlayers.length,
+    globalTime: session.globalTime,
+    createdAt: session.createdAt,
+    lastUpdate: session.lastUpdate
+  }));
+
+  res.json({
+    totalSessions: sessions.length,
+    sessions: sessions
+  });
+});
+
+// ===== WEBSOCKET EVENTS =====
+
 io.on('connection', (socket) => {
   console.log('Client connecté:', socket.id);
 
@@ -172,7 +332,7 @@ io.on('connection', (socket) => {
         currentPlayer.isRunning = false;
         session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
         
-        // ✅ CORRECTION : Lancer automatiquement le chrono du joueur suivant
+        // ✅ Lancer automatiquement le chrono du joueur suivant
         const nextPlayer = session.players[session.currentPlayerIndex];
         if (nextPlayer) {
           nextPlayer.isRunning = true;
@@ -196,7 +356,7 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('session-state', session);
   });
 
-  // ✅ CORRECTION : Skip un joueur avec lancement automatique du chrono suivant
+  // ✅ Skip un joueur avec lancement automatique du chrono suivant
   socket.on('skip-player', ({ sessionId, requesterId }) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
@@ -222,8 +382,7 @@ io.on('connection', (socket) => {
     // Passer au joueur suivant
     session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
     
-    // ✅ CORRECTION : Démarrer automatiquement le chrono du suivant MÊME s'il est déconnecté
-    // Le temps continuera à tourner et il sera responsable du temps écoulé
+    // ✅ Démarrer automatiquement le chrono du suivant MÊME s'il est déconnecté
     const nextPlayer = session.players[session.currentPlayerIndex];
     if (nextPlayer) {
       nextPlayer.isRunning = true;
@@ -241,15 +400,11 @@ io.on('connection', (socket) => {
 
     const player = session.players.find(p => p.id === playerId);
     if (player) {
-      // AMÉLIORATION : Ne mettre à jour que si le nouveau temps est supérieur
-      // (évite les problèmes de désynchronisation)
+      // Ne mettre à jour que si le nouveau temps est supérieur
       if (time >= player.time) {
         player.time = time;
       }
       session.lastUpdate = new Date();
-      
-      // Ne pas émettre immédiatement pour éviter trop de trafic réseau
-      // Les clients ont déjà la valeur locale, ils n'ont besoin que de confirmation
     }
   });
 
@@ -257,13 +412,11 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
 
-    // AMÉLIORATION : Ne mettre à jour que si le nouveau temps est supérieur
+    // Ne mettre à jour que si le nouveau temps est supérieur
     if (globalTime >= session.globalTime) {
       session.globalTime = globalTime;
     }
     session.lastUpdate = new Date();
-    
-    // Ne pas émettre immédiatement pour éviter trop de trafic réseau
   });
 
   socket.on('reset-session', (sessionId) => {
@@ -341,7 +494,8 @@ setInterval(() => {
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
-  console.log(`API REST disponible sur http://localhost:${PORT}/api`);
-  console.log(`WebSocket disponible sur ws://localhost:${PORT}`);
+  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+  console.log(`📡 API REST disponible sur http://localhost:${PORT}/api`);
+  console.log(`🔌 WebSocket disponible sur ws://localhost:${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/health`);
 });
