@@ -190,17 +190,58 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('session-state', session);
   });
 
+  // ✅ NOUVEAU : Skip un joueur (mode séquentiel uniquement, créateur uniquement)
+  socket.on('skip-player', ({ sessionId, requesterId }) => {
+    const session = gameSessions.get(sessionId);
+    if (!session) return;
+
+    // Vérification : seul le créateur (joueur 0) peut skip
+    if (requesterId !== 0) {
+      console.log(`Skip refusé : seul le créateur (0) peut skip, pas ${requesterId}`);
+      return;
+    }
+
+    // Vérification : mode séquentiel uniquement
+    if (session.mode !== 'sequential') {
+      console.log('Skip refusé : mode non séquentiel');
+      return;
+    }
+
+    // Mettre le joueur actuel en pause
+    const currentPlayer = session.players[session.currentPlayerIndex];
+    if (currentPlayer) {
+      currentPlayer.isRunning = false;
+    }
+
+    // Passer au joueur suivant
+    session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
+    
+    // Démarrer automatiquement le suivant s'il est connecté
+    const nextPlayer = session.players[session.currentPlayerIndex];
+    if (nextPlayer && session.connectedPlayers?.includes(nextPlayer.id)) {
+      nextPlayer.isRunning = true;
+    }
+
+    session.lastUpdate = new Date();
+    console.log(`Skip effectué : passage au joueur ${session.currentPlayerIndex} (${nextPlayer?.name})`);
+    io.to(sessionId).emit('session-state', session);
+  });
+
   socket.on('update-time', ({ sessionId, playerId, time }) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
 
     const player = session.players.find(p => p.id === playerId);
     if (player) {
-      // Ne mettre à jour que si le nouveau temps est supérieur
+      // AMÉLIORATION : Ne mettre à jour que si le nouveau temps est supérieur
+      // (évite les problèmes de désynchronisation)
       if (time >= player.time) {
         player.time = time;
       }
       session.lastUpdate = new Date();
+      
+      // Ne pas émettre immédiatement pour éviter trop de trafic réseau
+      // Les clients ont déjà la valeur locale, ils n'ont besoin que de confirmation
     }
   });
 
@@ -208,11 +249,13 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
 
-    // Ne mettre à jour que si le nouveau temps est supérieur
+    // AMÉLIORATION : Ne mettre à jour que si le nouveau temps est supérieur
     if (globalTime >= session.globalTime) {
       session.globalTime = globalTime;
     }
     session.lastUpdate = new Date();
+    
+    // Ne pas émettre immédiatement pour éviter trop de trafic réseau
   });
 
   socket.on('reset-session', (sessionId) => {
@@ -253,42 +296,6 @@ io.on('connection', (socket) => {
       session.lastUpdate = new Date();
       io.to(sessionId).emit('session-state', session);
     }
-  });
-
-  // ✅ NOUVEAU : Skip un joueur (mode séquentiel uniquement)
-  socket.on('skip-player', ({ sessionId, requesterId }) => {
-    const session = gameSessions.get(sessionId);
-    if (!session) return;
-
-    // Vérifier que c'est le créateur qui demande
-    if (requesterId !== 0) {
-      console.log(`Skip refusé : seul le créateur (0) peut skip, pas ${requesterId}`);
-      return;
-    }
-
-    // Vérifier qu'on est en mode séquentiel
-    if (session.mode !== 'sequential') {
-      console.log('Skip refusé : mode non séquentiel');
-      return;
-    }
-
-    // Mettre le joueur actuel en pause et passer au suivant
-    const currentPlayer = session.players[session.currentPlayerIndex];
-    if (currentPlayer) {
-      currentPlayer.isRunning = false;
-    }
-
-    session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
-    
-    // Démarrer automatiquement le suivant s'il est connecté
-    const nextPlayer = session.players[session.currentPlayerIndex];
-    if (nextPlayer && session.connectedPlayers?.includes(nextPlayer.id)) {
-      nextPlayer.isRunning = true;
-    }
-
-    session.lastUpdate = new Date();
-    console.log(`Skip effectué : passage au joueur ${session.currentPlayerIndex}`);
-    io.to(sessionId).emit('session-state', session);
   });
 
   socket.on('disconnect', () => {

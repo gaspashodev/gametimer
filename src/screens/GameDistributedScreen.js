@@ -27,6 +27,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const isCreator = myPlayerId === 0; // Le créateur est toujours le joueur 0
 
   const playerIntervalRef = useRef(null);
+  const otherPlayersIntervalRef = useRef(null); // ✅ NOUVEAU timer pour les autres
   const playersRef = useRef([]);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
       },
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        // ✅ CORRECTION : Réconciliation améliorée pour éviter le recul du chrono
+        // ✅ Réconciliation améliorée pour éviter le recul du chrono
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
@@ -69,6 +70,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
     return () => {
       ApiService.disconnectSocket();
       if (playerIntervalRef.current) clearInterval(playerIntervalRef.current);
+      if (otherPlayersIntervalRef.current) clearInterval(otherPlayersIntervalRef.current);
     };
   }, [sessionId, myPlayerId]);
 
@@ -112,6 +114,35 @@ const GameDistributedScreen = ({ route, navigation }) => {
     };
   }, [myPlayer?.isRunning, myPlayerId, sessionId]);
 
+  // ✅ NOUVEAU : Timer pour les autres joueurs en cours
+  useEffect(() => {
+    const hasOtherRunning = players.some(p => p.id !== myPlayerId && p.isRunning);
+    
+    if (hasOtherRunning && !otherPlayersIntervalRef.current) {
+      otherPlayersIntervalRef.current = setInterval(() => {
+        setPlayers((prev) => {
+          return prev.map((p) => {
+            // Incrémenter les autres joueurs qui sont en cours
+            if (p.id !== myPlayerId && p.isRunning) {
+              return { ...p, time: p.time + 1 };
+            }
+            return p;
+          });
+        });
+      }, 1000);
+    } else if (!hasOtherRunning && otherPlayersIntervalRef.current) {
+      clearInterval(otherPlayersIntervalRef.current);
+      otherPlayersIntervalRef.current = null;
+    }
+
+    return () => {
+      if (otherPlayersIntervalRef.current) {
+        clearInterval(otherPlayersIntervalRef.current);
+        otherPlayersIntervalRef.current = null;
+      }
+    };
+  }, [players, myPlayerId]);
+
   const toggleMyPlayer = () => {
     if (sessionStatus !== 'started') {
       Alert.alert('Attention', 'La partie n\'a pas encore commencé !');
@@ -131,7 +162,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
     ApiService.togglePlayer(sessionId, myPlayerId);
   };
 
-  // ✅ NOUVEAU : Skip un joueur (créateur uniquement)
+  // ✅ Skip un joueur (créateur uniquement)
   const handleSkipPlayer = () => {
     if (!isCreator) {
       Alert.alert('Erreur', 'Seul le créateur peut skip un joueur !');
@@ -158,7 +189,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   };
 
-  // ✅ NOUVEAU : Pause globale (créateur uniquement)
+  // ✅ Pause globale (créateur uniquement)
   const handlePauseAll = () => {
     if (!isCreator) {
       Alert.alert('Erreur', 'Seul le créateur peut mettre en pause globale !');
@@ -168,7 +199,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
     ApiService.pauseAll(sessionId);
   };
 
-  // ✅ NOUVEAU : Reset (créateur uniquement)
+  // ✅ Reset (créateur uniquement)
   const handleReset = () => {
     if (!isCreator) {
       Alert.alert('Erreur', 'Seul le créateur peut réinitialiser la partie !');
@@ -253,7 +284,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                       color={isConnectedPlayer ? '#10B981' : '#9CA3AF'}
                     />
                     <Text style={styles.lobbyPlayerName}>
-                      {player.name} {isMe && '(Vous)'} {player.id === 0 && '👑'}
+                      {player.name} {isMe && '(Vous)'}
                     </Text>
                   </View>
                   <Text style={[
@@ -309,56 +340,51 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   }
 
-  // Écran de jeu
+  // ✅ Écran de jeu - Header identique à GameSharedScreen
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <View style={styles.headerRow}>
+          <View style={styles.headerTop}>
             <View style={styles.connectionStatus}>
               <Icon
                 name={isConnected ? 'wifi' : 'wifi-off'}
                 size={20}
                 color={isConnected ? '#10B981' : '#EF4444'}
               />
-              <Text style={styles.joinCodeText}>Code: {joinCode}</Text>
+              <Text style={styles.joinCodeTextSmall}>Code: {joinCode}</Text>
             </View>
-            <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
-              <Icon name="exit-to-app" size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-
-          {/* ✅ NOUVEAU : Contrôles créateur */}
-          {isCreator && (
-            <View style={styles.creatorControls}>
-              <Text style={styles.creatorTitle}>👑 Contrôles Créateur</Text>
-              <View style={styles.creatorButtons}>
-                <TouchableOpacity
-                  style={[styles.creatorButton, styles.creatorButtonWarning]}
+            <View style={styles.headerButtons}>
+              {/* ✅ Bouton Pause générale - visible uniquement si un joueur est actif ET si créateur */}
+              {isCreator && players.some(p => p.isRunning) && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.pauseAllButton]} 
                   onPress={handlePauseAll}
                 >
-                  <Icon name="pause-circle" size={20} color="#fff" />
-                  <Text style={styles.creatorButtonText}>Pause</Text>
+                  <Icon name="pause-circle" size={24} color="#F59E0B" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.creatorButton, styles.creatorButtonDanger]}
-                  onPress={handleReset}
+              )}
+              {/* ✅ Bouton Skip - uniquement en mode séquentiel ET si créateur */}
+              {isCreator && mode === 'sequential' && (
+                <TouchableOpacity 
+                  style={[styles.iconButton, styles.skipButton]} 
+                  onPress={handleSkipPlayer}
                 >
-                  <Icon name="refresh" size={20} color="#fff" />
-                  <Text style={styles.creatorButtonText}>Reset</Text>
+                  <Icon name="skip-next" size={24} color="#6366F1" />
                 </TouchableOpacity>
-                {mode === 'sequential' && (
-                  <TouchableOpacity
-                    style={[styles.creatorButton, styles.creatorButtonWarning]}
-                    onPress={handleSkipPlayer}
-                  >
-                    <Icon name="skip-next" size={20} color="#fff" />
-                    <Text style={styles.creatorButtonText}>Skip</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              )}
+              {/* ✅ Bouton Reset - uniquement pour le créateur */}
+              {isCreator && (
+                <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
+                  <Icon name="refresh" size={24} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+              {/* ✅ Bouton Quitter - toujours visible */}
+              <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
+                <Icon name="exit-to-app" size={24} color="#6B7280" />
+              </TouchableOpacity>
             </View>
-          )}
+          </View>
 
           <View style={styles.globalTimeContainer}>
             <Text style={styles.globalTimeLabel}>Temps Total</Text>
@@ -381,9 +407,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
             isMyTurn && !myPlayer.isRunning && styles.myPlayerCardTurn,
           ]}
         >
-          <Text style={styles.myPlayerName}>
-            {myPlayer.name} {isCreator && '👑'}
-          </Text>
+          <Text style={styles.myPlayerName}>{myPlayer.name}</Text>
           <Text style={styles.myPlayerTime}>{formatTime(myPlayer.time)}</Text>
 
           <TouchableOpacity
@@ -418,29 +442,19 @@ const GameDistributedScreen = ({ route, navigation }) => {
           <Text style={styles.sectionTitle}>Autres joueurs</Text>
           {players
             .filter((p) => p.id !== myPlayerId)
-            .map((player) => {
-              const isPlayerConnected = connectedPlayers.includes(player.id);
-              return (
-                <View key={player.id} style={styles.otherPlayerCard}>
-                  <View style={styles.otherPlayerInfo}>
-                    <Text style={styles.otherPlayerName}>
-                      {player.name} {player.id === 0 && '👑'}
-                    </Text>
-                    <View style={styles.playerStatusBadges}>
-                      {player.isRunning && (
-                        <Icon name="play-circle" size={20} color="#10B981" />
-                      )}
-                      {!isPlayerConnected && (
-                        <Icon name="wifi-off" size={20} color="#EF4444" />
-                      )}
-                    </View>
-                  </View>
-                  <Text style={styles.otherPlayerTime}>
-                    {formatTime(player.time)}
-                  </Text>
+            .map((player) => (
+              <View key={player.id} style={styles.otherPlayerCard}>
+                <View style={styles.otherPlayerInfo}>
+                  <Text style={styles.otherPlayerName}>{player.name}</Text>
+                  {player.isRunning && (
+                    <Icon name="play-circle" size={20} color="#10B981" />
+                  )}
                 </View>
-              );
-            })}
+                <Text style={styles.otherPlayerTime}>
+                  {formatTime(player.time)}
+                </Text>
+              </View>
+            ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -476,63 +490,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  headerRow: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   connectionStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  joinCodeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4F46E5',
+  joinCodeTextSmall: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 12,
   },
   iconButton: {
     padding: 8,
   },
-  // ✅ NOUVEAUX STYLES : Contrôles créateur
-  creatorControls: {
+  pauseAllButton: {
     backgroundColor: '#FEF3C7',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#F59E0B',
-  },
-  creatorTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#92400E',
-    marginBottom: 8,
-  },
-  creatorButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  creatorButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
     borderRadius: 8,
-    gap: 4,
   },
-  creatorButtonWarning: {
-    backgroundColor: '#F59E0B',
-  },
-  creatorButtonDanger: {
-    backgroundColor: '#EF4444',
-  },
-  creatorButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+  skipButton: {
+    backgroundColor: '#E0E7FF',
+    borderRadius: 8,
   },
   globalTimeContainer: {
     alignItems: 'center',
@@ -655,11 +642,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
-  },
-  playerStatusBadges: {
-    flexDirection: 'row',
-    gap: 4,
   },
   otherPlayerName: {
     fontSize: 16,
