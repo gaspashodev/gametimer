@@ -171,7 +171,13 @@ io.on('connection', (socket) => {
         // Le joueur actif clique sur "Suivant" → passer au suivant
         currentPlayer.isRunning = false;
         session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
-        session.players[session.currentPlayerIndex].isRunning = true;
+        
+        // ✅ CORRECTION : Lancer automatiquement le chrono du joueur suivant
+        const nextPlayer = session.players[session.currentPlayerIndex];
+        if (nextPlayer) {
+          nextPlayer.isRunning = true;
+          console.log(`Passage automatique au joueur ${nextPlayer.name} (ID: ${nextPlayer.id})`);
+        }
       } else {
         // Le joueur actif (en pause) clique sur "Démarrer"
         currentPlayer.isRunning = true;
@@ -190,7 +196,7 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('session-state', session);
   });
 
-  // ✅ NOUVEAU : Skip un joueur (mode séquentiel uniquement, créateur uniquement)
+  // ✅ CORRECTION : Skip un joueur avec lancement automatique du chrono suivant
   socket.on('skip-player', ({ sessionId, requesterId }) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
@@ -216,14 +222,16 @@ io.on('connection', (socket) => {
     // Passer au joueur suivant
     session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
     
-    // Démarrer automatiquement le suivant s'il est connecté
+    // ✅ CORRECTION : Démarrer automatiquement le chrono du suivant MÊME s'il est déconnecté
+    // Le temps continuera à tourner et il sera responsable du temps écoulé
     const nextPlayer = session.players[session.currentPlayerIndex];
-    if (nextPlayer && session.connectedPlayers?.includes(nextPlayer.id)) {
+    if (nextPlayer) {
       nextPlayer.isRunning = true;
+      const isConnected = session.connectedPlayers?.includes(nextPlayer.id);
+      console.log(`Skip effectué : chrono lancé automatiquement pour ${nextPlayer.name} (ID: ${nextPlayer.id}, connecté: ${isConnected ? 'oui' : 'non'})`);
     }
 
     session.lastUpdate = new Date();
-    console.log(`Skip effectué : passage au joueur ${session.currentPlayerIndex} (${nextPlayer?.name})`);
     io.to(sessionId).emit('session-state', session);
   });
 
