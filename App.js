@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './src/screens/HomeScreen';
 import ConfigScreen from './src/screens/ConfigScreen';
 import JoinScreen from './src/screens/JoinScreen';
@@ -13,7 +14,7 @@ const Stack = createStackNavigator();
 
 export default function App() {
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar style="light" />
       <NavigationContainer>
         <Stack.Navigator
@@ -60,6 +61,6 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
-    </>
+    </SafeAreaProvider>
   );
 }

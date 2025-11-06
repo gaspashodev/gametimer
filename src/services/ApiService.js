@@ -6,7 +6,7 @@ import io from 'socket.io-client';
 // Pour iOS, utilisez l'IP locale de votre machine
 export const API_URL = __DEV__ 
   ? 'http://192.168.1.32:3001' // Votre IP locale pour dev
-  : 'game-timer-backend-production.up.railway.app'; // ✅ URL Railway en production
+  : 'https://game-timer-backend-production.up.railway.app'; // ✅ URL Railway en production
 
 class ApiService {
   constructor() {

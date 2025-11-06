@@ -43,6 +43,17 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Game Timer API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      sessions: '/api/sessions'
+    }
+  });
+});
+
 // Créer une nouvelle session de jeu
 app.post('/api/sessions', (req, res) => {
   const { mode, numPlayers, displayMode, playerNames } = req.body;

@@ -20,3 +20,6 @@ yarn-error.log
 
 # Testing
 coverage/
+
+# Backend (server est dans un repo séparé)
+server/
