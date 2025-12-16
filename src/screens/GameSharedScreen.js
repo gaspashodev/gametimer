@@ -6,13 +6,17 @@ import {
   StyleSheet,
   FlatList,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
 
 const GameSharedScreen = ({ route, navigation }) => {
+  const { colors, isDark, toggleTheme } = useTheme();
   const { sessionId, joinCode, mode } = route.params;
   const [players, setPlayers] = useState([]);
   const [globalTime, setGlobalTime] = useState(0);
@@ -36,11 +40,9 @@ const GameSharedScreen = ({ route, navigation }) => {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        // ✅ CORRECTION : Réconciliation améliorée pour éviter le recul
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
-          // Pour les joueurs en cours, privilégier le temps local s'il est supérieur
           if (localPlayer && localPlayer.isRunning && serverPlayer.isRunning) {
             return { 
               ...serverPlayer, 
@@ -64,7 +66,6 @@ const GameSharedScreen = ({ route, navigation }) => {
     };
   }, [sessionId]);
 
-  // Timer global = somme des temps de tous les joueurs
   useEffect(() => {
     const total = players.reduce((sum, player) => sum + player.time, 0);
     setGlobalTime(total);
@@ -74,7 +75,6 @@ const GameSharedScreen = ({ route, navigation }) => {
     }
   }, [players, sessionId]);
 
-  // Timers individuels
   useEffect(() => {
     players.forEach((player) => {
       if (player.isRunning && !playerIntervalsRef.current[player.id]) {
@@ -158,232 +158,285 @@ const GameSharedScreen = ({ route, navigation }) => {
     const canInteract = mode === 'independent' || isCurrentTurn;
 
     return (
-      <View
-        style={[
-          styles.playerCard,
-          player.isRunning && styles.playerCardActive,
-          isCurrentTurn && !player.isRunning && styles.playerCardTurn,
-        ]}
-      >
-        <Text style={styles.playerName}>{player.name}</Text>
-        <Text style={styles.playerTime}>{formatTime(player.time)}</Text>
-        <TouchableOpacity
+      <View style={styles.playerCardWrapper}>
+        <View
           style={[
-            styles.playerButton,
-            player.isRunning ? styles.pauseButton : styles.playButton,
-            !canInteract && styles.playerButtonDisabled,
+            styles.playerCard,
+            {
+              backgroundColor: player.isRunning
+                ? colors.secondary
+                : isCurrentTurn && !player.isRunning
+                  ? colors.warning
+                  : colors.card,
+              borderColor: player.isRunning
+                ? colors.secondary
+                : isCurrentTurn && !player.isRunning
+                  ? colors.warning
+                  : colors.cardBorder,
+            },
           ]}
-          onPress={() => togglePlayer(player.id)}
-          disabled={!canInteract}
         >
-          <Icon
-            name={player.isRunning ? 'pause' : 'play'}
-            size={24}
-            color="#fff"
-          />
-          <Text style={styles.playerButtonText}>
-            {player.isRunning
-              ? mode === 'sequential'
-                ? 'Suivant'
-                : 'Pause'
-              : 'Démarrer'}
+          <Text style={[styles.playerName, { color: player.isRunning || isCurrentTurn ? '#fff' : colors.text }]}>
+            {player.name}
           </Text>
-        </TouchableOpacity>
+          <Text style={[styles.playerTime, { color: player.isRunning || isCurrentTurn ? '#fff' : colors.text }]}>
+            {formatTime(player.time)}
+          </Text>
+          
+          <TouchableOpacity
+            style={[
+              styles.playerButton,
+              !canInteract && styles.playerButtonDisabled,
+            ]}
+            onPress={() => togglePlayer(player.id)}
+            disabled={!canInteract}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={
+                !canInteract
+                  ? [colors.disabled, colors.disabled]
+                  : player.isRunning
+                    ? ['#F59E0B', '#D97706']
+                    : colors.primaryGradient
+              }
+              style={styles.playerButtonGradient}
+            >
+              <Icon
+                name={player.isRunning ? 'pause' : 'play'}
+                size={20}
+                color="#fff"
+              />
+              <Text style={styles.playerButtonText}>
+                {player.isRunning
+                  ? mode === 'sequential'
+                    ? 'Suivant'
+                    : 'Pause'
+                  : 'Démarrer'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.connectionStatus}>
-            <Icon
-              name={isConnected ? 'wifi' : 'wifi-off'}
-              size={20}
-              color={isConnected ? '#10B981' : '#EF4444'}
-            />
-            <Text style={styles.joinCodeTextSmall}>Code: {joinCode}</Text>
-          </View>
-          <View style={styles.headerButtons}>
-            {players.some(p => p.isRunning) && (
-              <TouchableOpacity 
-                style={[styles.iconButton, styles.pauseAllButton]} 
-                onPress={pauseAll}
+    <LinearGradient colors={colors.background} style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
+          <View style={styles.headerTop}>
+            <View style={styles.connectionStatus}>
+              <View style={[
+                styles.connectionDot,
+                { backgroundColor: isConnected ? colors.success : colors.danger }
+              ]} />
+              <Text style={[styles.codeText, { color: colors.textSecondary }]}>
+                Code: {joinCode}
+              </Text>
+            </View>
+
+            <View style={styles.headerButtons}>
+              {players.some(p => p.isRunning) && (
+                <TouchableOpacity
+                  style={[styles.iconButton, { backgroundColor: colors.card }]}
+                  onPress={pauseAll}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="pause-circle" size={22} color={colors.warning} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: colors.card }]}
+                onPress={handleReset}
+                activeOpacity={0.7}
               >
-                <Icon name="pause-circle" size={24} color="#F59E0B" />
+                <Icon name="refresh" size={22} color={colors.danger} />
               </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
-              <Icon name="refresh" size={24} color="#EF4444" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.iconButton} 
-              onPress={() => navigation.navigate('PartyStats', { sessionId })}
-            >
-              <Icon name="chart-bar" size={24} color="#4F46E5" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
-              <Icon name="exit-to-app" size={24} color="#6B7280" />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: colors.card }]}
+                onPress={() => navigation.navigate('PartyStats', { sessionId })}
+                activeOpacity={0.7}
+              >
+                <Icon name="chart-bar" size={22} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: colors.card }]}
+                onPress={handleQuit}
+                activeOpacity={0.7}
+              >
+                <Icon name="exit-to-app" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* Temps global */}
+          <LinearGradient
+            colors={colors.primaryGradient}
+            style={styles.globalTimeCard}
+          >
+            <Text style={styles.globalTimeLabel}>Temps Total</Text>
+            <Text style={styles.globalTime}>{formatTime(globalTime)}</Text>
+          </LinearGradient>
+
+          {mode === 'sequential' && (
+            <View style={[styles.turnBadge, { backgroundColor: colors.card }]}>
+              <Icon name="account-arrow-right" size={20} color={colors.text} />
+              <Text style={[styles.turnText, { color: colors.text }]}>
+                Tour de {players[currentPlayerIndex]?.name}
+              </Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.globalTimeContainer}>
-          <Text style={styles.globalTimeLabel}>Temps Total</Text>
-          <Text style={styles.globalTime}>{formatTime(globalTime)}</Text>
-        </View>
-
-        {mode === 'sequential' && (
-          <Text style={styles.currentPlayerText}>
-            Tour de {players[currentPlayerIndex]?.name}
-          </Text>
-        )}
-      </View>
-
-      <FlatList
-        data={players}
-        renderItem={renderPlayer}
-        keyExtractor={(item) => item.id.toString()}
-        numColumns={2}
-        contentContainerStyle={styles.playersGrid}
-        columnWrapperStyle={styles.columnWrapper}
-      />
-    </SafeAreaView>
+        {/* Grille des joueurs */}
+        <FlatList
+          data={players}
+          renderItem={renderPlayer}
+          keyExtractor={(item) => item.id.toString()}
+          numColumns={2}
+          contentContainerStyle={styles.playersGrid}
+          columnWrapperStyle={styles.columnWrapper}
+          showsVerticalScrollIndicator={false}
+        />
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
-    backgroundColor: '#fff',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   connectionStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  joinCodeTextSmall: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#9CA3AF',
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  codeText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   iconButton: {
-    padding: 8,
-  },
-  pauseAllButton: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-  },
-  globalTimeContainer: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: '#EEF2FF',
+    width: 40,
+    height: 40,
     borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  globalTimeCard: {
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
   },
   globalTimeLabel: {
     fontSize: 14,
-    color: '#4F46E5',
     fontWeight: '600',
+    color: '#fff',
+    opacity: 0.9,
+    marginBottom: 4,
   },
   globalTime: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: 'bold',
-    color: '#4F46E5',
+    color: '#fff',
     fontFamily: 'monospace',
   },
-  currentPlayerText: {
-    textAlign: 'center',
-    marginTop: 12,
-    fontSize: 16,
+  turnBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignSelf: 'center',
+  },
+  turnText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
   },
   playersGrid: {
-    padding: 12,
+    padding: 16,
+    paddingBottom: 32,
   },
   columnWrapper: {
     gap: 12,
     marginBottom: 12,
   },
+  playerCardWrapper: {
+    flex: 1,
+  },
   playerCard: {
-    width:'48%',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
-    elevation: 2,
+    padding: 16,
+    gap: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  playerCardActive: {
-    borderColor: '#10B981',
-    borderWidth: 3,
-  },
-  playerCardTurn: {
-    borderColor: '#F59E0B',
-    borderWidth: 3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   playerName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 8,
+    fontWeight: '700',
   },
   playerTime: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#1F2937',
     fontFamily: 'monospace',
-    marginBottom: 12,
     textAlign: 'center',
   },
   playerButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  playerButtonDisabled: {
+    opacity: 0.5,
+  },
+  playerButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 12,
     gap: 6,
-  },
-  playButton: {
-    backgroundColor: '#10B981',
-  },
-  pauseButton: {
-    backgroundColor: '#F59E0B',
-  },
-  playerButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-    opacity: 0.6,
   },
   playerButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
 

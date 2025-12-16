@@ -490,23 +490,127 @@ io.on('connection', (socket) => {
   });
 });
 
-// Nettoyer les sessions inactives toutes les heures
+// ==========================================
+// 🧠 SYSTÈME DE KEEP-ALIVE INTELLIGENT
+// ==========================================
+
+// Configuration des horaires
+const KEEP_ALIVE_CONFIG = {
+  // Actif de 9h à minuit (15h/jour)
+  // Plus besoin d'UptimeRobot !
+  startHour: 9,    // 9h du matin
+  endHour: 24,     // Minuit (0h)
+  
+  // Jours actifs (true = actif)
+  activeDays: {
+    0: true,   // Dimanche
+    1: true,   // Lundi
+    2: true,   // Mardi
+    3: true,   // Mercredi
+    4: true,   // Jeudi
+    5: true,   // Vendredi
+    6: true,   // Samedi
+  },
+  
+  // Intervalle de ping
+  pingInterval: 4 * 60 * 1000, // 4 minutes
+};
+
+// Fonction pour vérifier si on est dans les horaires actifs
+function isInActiveHours() {
+  const now = new Date();
+  const hour = now.getHours();
+  const day = now.getDay();
+  
+  // Vérifier le jour
+  if (!KEEP_ALIVE_CONFIG.activeDays[day]) {
+    return false;
+  }
+  
+  // Vérifier l'heure
+  return hour >= KEEP_ALIVE_CONFIG.startHour && hour < KEEP_ALIVE_CONFIG.endHour;
+}
+
+// Fonction pour déterminer si on doit garder le serveur actif
+function shouldKeepAlive() {
+  // 1. Toujours actif si des sessions en cours
+  if (gameSessions.size > 0) {
+    return { active: true, reason: `${gameSessions.size} session(s) active(s)` };
+  }
+  
+  // 2. Vérifier les horaires configurés
+  if (!isInActiveHours()) {
+    const now = new Date();
+    return { 
+      active: false, 
+      reason: `Hors horaires actifs (${now.getHours()}h)` 
+    };
+  }
+  
+  // 3. Sinon, actif selon les horaires uniquement
+  return { 
+    active: true, 
+    reason: 'Horaires actifs, maintien préventif' 
+  };
+}
+
+// Système de keep-alive intelligent
+let keepAliveCounter = 0;
+const CLEANUP_EVERY_N_PINGS = 15; // 15 pings × 4min = 60min
+
 setInterval(() => {
   const now = new Date();
-  for (const [sessionId, session] of gameSessions.entries()) {
-    const hoursSinceUpdate = (now - session.lastUpdate) / (1000 * 60 * 60);
-    if (hoursSinceUpdate > 24) {
-      gameSessions.delete(sessionId);
-      console.log(`Session ${sessionId} supprimée (inactive depuis 24h)`);
+  const status = shouldKeepAlive();
+  
+  if (status.active) {
+    keepAliveCounter++;
+    console.log(`🏓 [${now.toISOString().substring(11, 19)}] Ping #${keepAliveCounter} - ${status.reason}`);
+    
+    // Nettoyage des sessions toutes les heures
+    if (keepAliveCounter >= CLEANUP_EVERY_N_PINGS) {
+      keepAliveCounter = 0;
+      
+      console.log(`🧹 Nettoyage sessions (${gameSessions.size} actives)...`);
+      for (const [sessionId, session] of gameSessions.entries()) {
+        const hoursSinceUpdate = (now - session.lastUpdate) / (1000 * 60 * 60);
+        if (hoursSinceUpdate > 24) {
+          gameSessions.delete(sessionId);
+          console.log(`   ├─ Session ${sessionId} supprimée (${hoursSinceUpdate.toFixed(1)}h)`);
+        }
+      }
+      console.log(`   └─ ${gameSessions.size} session(s) restante(s)`);
     }
+  } else {
+    console.log(`😴 [${now.toISOString().substring(11, 19)}] Keep-alive désactivé - ${status.reason}`);
   }
-}, 3600000);
+}, KEEP_ALIVE_CONFIG.pingInterval);
 
 const PORT = process.env.PORT || 3001;
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📡 API REST disponible sur http://localhost:${PORT}/api`);
-  console.log(`🔌 WebSocket disponible sur ws://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`📡 API REST: http://0.0.0.0:${PORT}/api`);
+  console.log(`🔌 WebSocket: ws://0.0.0.0:${PORT}`);
+  console.log(`📊 Health: http://0.0.0.0:${PORT}/health`);
+  console.log('');
+  console.log('⏰ Keep-alive intelligent activé :');
+  console.log(`   • Auto-ping : ${KEEP_ALIVE_CONFIG.startHour}h-${KEEP_ALIVE_CONFIG.endHour}h (15h/jour)`);
+  console.log(`   • Serveur éteint : 0h-9h (économie maximale)`);
+  console.log(`   • Jours actifs : Lun-Dim (7j/7)`);
+  console.log(`   • Intervalle : ${KEEP_ALIVE_CONFIG.pingInterval / 60000}min`);
+  console.log(`   • Mode adaptatif : Actif si sessions ou activité récente`);
+  
+  // Calculer consommation estimée
+  const activeHoursPerDay = KEEP_ALIVE_CONFIG.endHour - KEEP_ALIVE_CONFIG.startHour;
+  const activeDaysPerWeek = Object.values(KEEP_ALIVE_CONFIG.activeDays).filter(d => d).length;
+  const estimatedHoursPerMonth = (activeHoursPerDay * activeDaysPerWeek * 4.3);
+  
+  console.log('');
+  console.log(`📈 Consommation estimée : ${Math.round(estimatedHoursPerMonth)}h/mois (limite: 500h)`);
+  
+  if (estimatedHoursPerMonth > 500) {
+    console.log('⚠️  ATTENTION : Risque de dépassement de la limite gratuite');
+  } else {
+    console.log(`✅ Marge disponible : ${Math.round(500 - estimatedHoursPerMonth)}h/mois`);
+  }
 });

@@ -10,25 +10,33 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
 
 const ConfigScreen = ({ navigation }) => {
+  const { colors, isDark, toggleTheme } = useTheme();
   const [mode, setMode] = useState('sequential');
   const [displayMode, setDisplayMode] = useState('shared');
   const [numPlayers, setNumPlayers] = useState(4);
-  const [playerNames, setPlayerNames] = useState(Array(4).fill(''));
+  const [creatorName, setCreatorName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Création de la partie...');
 
-  const handleNumPlayersChange = (num) => {
-    setNumPlayers(num);
-    setPlayerNames(Array(num).fill(''));
+  // Fonction pour vérifier si on est dans les heures de réveil lent
+  const isSlowWakeupTime = () => {
+    const hour = new Date().getHours();
+    // Entre 2h et 11h du matin (réveil lent)
+    return hour >= 2 && hour < 11;
   };
 
-  const handlePlayerNameChange = (index, name) => {
-    const newNames = [...playerNames];
-    newNames[index] = name;
-    setPlayerNames(newNames);
+  const incrementPlayers = () => {
+    if (numPlayers < 10) setNumPlayers(numPlayers + 1);
+  };
+
+  const decrementPlayers = () => {
+    if (numPlayers > 2) setNumPlayers(numPlayers - 1);
   };
 
   const createSession = async () => {
@@ -37,13 +45,31 @@ const ConfigScreen = ({ navigation }) => {
       return;
     }
 
+    if (!creatorName.trim()) {
+      Alert.alert('Erreur', 'Veuillez entrer votre pseudo');
+      return;
+    }
+
     setLoading(true);
+    
+    // Message adaptatif selon l'heure
+    if (isSlowWakeupTime()) {
+      setLoadingMessage('Réveil du serveur en cours (15-20 secondes)...');
+    } else {
+      setLoadingMessage('Création de la partie...');
+    }
+    
     try {
+      const playerNames = [creatorName.trim()];
+      for (let i = 1; i < numPlayers; i++) {
+        playerNames.push(`Joueur ${i + 1}`);
+      }
+      
       const data = await ApiService.createSession(
         mode,
         numPlayers,
         displayMode,
-        playerNames.slice(0, numPlayers)
+        playerNames
       );
 
       setLoading(false);
@@ -59,185 +85,363 @@ const ConfigScreen = ({ navigation }) => {
           sessionId: data.sessionId,
           joinCode: data.joinCode,
           mode: mode,
-          myPlayerId: 0, // Le créateur est le premier joueur
+          myPlayerId: 0,
         });
       }
     } catch (error) {
       setLoading(false);
-      Alert.alert('Erreur', 'Impossible de créer la partie. Vérifiez votre connexion.');
+      console.error('Erreur création session:', error);
+      Alert.alert(
+        'Connexion impossible',
+        'Impossible de créer la partie. Vérifiez votre connexion internet.',
+        [{ text: 'Réessayer', onPress: () => {} }]
+      );
     }
   };
 
+  const canCreate = creatorName.trim().length > 0 && !loading;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Mode de jeu</Text>
-        <View style={styles.optionContainer}>
-          <TouchableOpacity
-            style={[
-              styles.optionButton,
-              mode === 'sequential' && styles.optionButtonActive,
-            ]}
-            onPress={() => setMode('sequential')}
+    <LinearGradient
+      colors={colors.background}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        {/* Header avec switch thème */}
+        <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
+          <TouchableOpacity 
+            style={[styles.backButton, { backgroundColor: colors.card }]}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
           >
-            <Icon
-              name="play-circle"
-              size={32}
-              color={mode === 'sequential' ? '#4F46E5' : '#6B7280'}
-            />
-            <Text
-              style={[
-                styles.optionTitle,
-                mode === 'sequential' && styles.optionTitleActive,
-              ]}
-            >
-              Séquentiel
-            </Text>
-            <Text style={styles.optionDescription}>
-              Un joueur à la fois, tour par tour
-            </Text>
+            <Icon name="arrow-left" size={24} color={colors.text} />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.optionButton,
-              mode === 'independent' && styles.optionButtonActive,
-            ]}
-            onPress={() => setMode('independent')}
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Nouvelle Partie</Text>
+          <TouchableOpacity 
+            style={[styles.themeButton, { backgroundColor: colors.card }]}
+            onPress={toggleTheme}
+            activeOpacity={0.7}
           >
-            <Icon
-              name="timer-multiple"
-              size={32}
-              color={mode === 'independent' ? '#4F46E5' : '#6B7280'}
+            <Icon 
+              name={isDark ? 'white-balance-sunny' : 'moon-waning-crescent'} 
+              size={22} 
+              color={colors.text} 
             />
-            <Text
-              style={[
-                styles.optionTitle,
-                mode === 'independent' && styles.optionTitleActive,
-              ]}
-            >
-              Indépendant
-            </Text>
-            <Text style={styles.optionDescription}>
-              Plusieurs timers simultanés
-            </Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Mode d'affichage</Text>
-        <View style={styles.optionContainer}>
-          <TouchableOpacity
-            style={[
-              styles.optionButton,
-              displayMode === 'shared' && styles.optionButtonActive,
-            ]}
-            onPress={() => setDisplayMode('shared')}
-          >
-            <Icon
-              name="tablet"
-              size={32}
-              color={displayMode === 'shared' ? '#10B981' : '#6B7280'}
-            />
-            <Text
-              style={[
-                styles.optionTitle,
-                displayMode === 'shared' && styles.optionTitleActive,
-              ]}
-            >
-              Partagé
-            </Text>
-            <Text style={styles.optionDescription}>
-              Un seul appareil pour tous
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.optionButton,
-              displayMode === 'distributed' && styles.optionButtonActive,
-            ]}
-            onPress={() => setDisplayMode('distributed')}
-          >
-            <Icon
-              name="cellphone-multiple"
-              size={32}
-              color={displayMode === 'distributed' ? '#10B981' : '#6B7280'}
-            />
-            <Text
-              style={[
-                styles.optionTitle,
-                displayMode === 'distributed' && styles.optionTitleActive,
-              ]}
-            >
-              Distribué
-            </Text>
-            <Text style={styles.optionDescription}>
-              Chacun sur son appareil
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.sectionTitle}>Nombre de joueurs: {numPlayers}</Text>
-        <View style={styles.sliderContainer}>
-          <View style={styles.numberButtons}>
-            {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-              <TouchableOpacity
-                key={num}
-                style={[
-                  styles.numberButton,
-                  numPlayers === num && styles.numberButtonActive,
-                ]}
-                onPress={() => handleNumPlayersChange(num)}
-              >
-                <Text
-                  style={[
-                    styles.numberButtonText,
-                    numPlayers === num && styles.numberButtonTextActive,
-                  ]}
-                >
-                  {num}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Noms des joueurs (optionnel)</Text>
-        <View style={styles.namesContainer}>
-          {Array.from({ length: numPlayers }, (_, i) => (
-            <TextInput
-              key={i}
-              style={styles.nameInput}
-              placeholder={`Joueur ${i + 1}`}
-              value={playerNames[i]}
-              onChangeText={(text) => handlePlayerNameChange(i, text)}
-            />
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.createButton, loading && styles.createButtonDisabled]}
-          onPress={createSession}
-          disabled={loading}
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Icon name="play-circle" size={24} color="#fff" />
-              <Text style={styles.createButtonText}>Créer la Partie</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+            {/* Mode de jeu */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Mode de jeu</Text>
+              <View style={styles.optionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.optionCard, 
+                    { borderColor: mode === 'sequential' ? colors.primary : colors.cardBorder }
+                  ]}
+                  onPress={() => setMode('sequential')}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={mode === 'sequential' 
+                      ? (isDark ? ['rgba(102, 126, 234, 0.2)', 'rgba(118, 75, 162, 0.2)'] : ['rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)'])
+                      : [colors.card, colors.card]}
+                    style={styles.optionCardGradient}
+                  >
+                    <View style={[
+                      styles.iconCircle, 
+                      { backgroundColor: mode === 'sequential' ? colors.primary : colors.card }
+                    ]}>
+                      <Icon 
+                        name="play-circle-outline" 
+                        size={32} 
+                        color={mode === 'sequential' ? '#fff' : colors.textSecondary} 
+                      />
+                    </View>
+                    <Text style={[
+                      styles.optionTitle, 
+                      { color: mode === 'sequential' ? colors.text : colors.textSecondary }
+                    ]}>
+                      Séquentiel
+                    </Text>
+                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
+                      Tour par tour
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.optionCard,
+                    { borderColor: mode === 'independent' ? colors.primary : colors.cardBorder }
+                  ]}
+                  onPress={() => setMode('independent')}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={mode === 'independent' 
+                      ? (isDark ? ['rgba(102, 126, 234, 0.2)', 'rgba(118, 75, 162, 0.2)'] : ['rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)'])
+                      : [colors.card, colors.card]}
+                    style={styles.optionCardGradient}
+                  >
+                    <View style={[
+                      styles.iconCircle,
+                      { backgroundColor: mode === 'independent' ? colors.primary : colors.card }
+                    ]}>
+                      <Icon 
+                        name="timer-outline" 
+                        size={32} 
+                        color={mode === 'independent' ? '#fff' : colors.textSecondary} 
+                      />
+                    </View>
+                    <Text style={[
+                      styles.optionTitle,
+                      { color: mode === 'independent' ? colors.text : colors.textSecondary }
+                    ]}>
+                      Indépendant
+                    </Text>
+                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
+                      Simultané
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Mode d'affichage */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Affichage</Text>
+              <View style={styles.optionRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.optionCard,
+                    { borderColor: displayMode === 'shared' ? colors.secondary : colors.cardBorder }
+                  ]}
+                  onPress={() => setDisplayMode('shared')}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={displayMode === 'shared' 
+                      ? (isDark ? ['rgba(17, 153, 142, 0.2)', 'rgba(56, 239, 125, 0.2)'] : ['rgba(17, 153, 142, 0.1)', 'rgba(56, 239, 125, 0.1)'])
+                      : [colors.card, colors.card]}
+                    style={styles.optionCardGradient}
+                  >
+                    <View style={[
+                      styles.iconCircle,
+                      { backgroundColor: displayMode === 'shared' ? colors.secondary : colors.card }
+                    ]}>
+                      <Icon 
+                        name="tablet" 
+                        size={32} 
+                        color={displayMode === 'shared' ? '#fff' : colors.textSecondary} 
+                      />
+                    </View>
+                    <Text style={[
+                      styles.optionTitle,
+                      { color: displayMode === 'shared' ? colors.text : colors.textSecondary }
+                    ]}>
+                      Partagé
+                    </Text>
+                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
+                      Un écran
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.optionCard,
+                    { borderColor: displayMode === 'distributed' ? colors.secondary : colors.cardBorder }
+                  ]}
+                  onPress={() => setDisplayMode('distributed')}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={displayMode === 'distributed' 
+                      ? (isDark ? ['rgba(17, 153, 142, 0.2)', 'rgba(56, 239, 125, 0.2)'] : ['rgba(17, 153, 142, 0.1)', 'rgba(56, 239, 125, 0.1)'])
+                      : [colors.card, colors.card]}
+                    style={styles.optionCardGradient}
+                  >
+                    <View style={[
+                      styles.iconCircle,
+                      { backgroundColor: displayMode === 'distributed' ? colors.secondary : colors.card }
+                    ]}>
+                      <Icon 
+                        name="devices" 
+                        size={32} 
+                        color={displayMode === 'distributed' ? '#fff' : colors.textSecondary} 
+                      />
+                    </View>
+                    <Text style={[
+                      styles.optionTitle,
+                      { color: displayMode === 'distributed' ? colors.text : colors.textSecondary }
+                    ]}>
+                      Distribué
+                    </Text>
+                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
+                      Multi-appareils
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Pseudo */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Votre pseudo</Text>
+              <View style={[styles.inputCard, { borderColor: colors.cardBorder }]}>
+                <LinearGradient
+                  colors={[colors.card, colors.card]}
+                  style={styles.inputGradient}
+                >
+                  <View style={styles.inputIconWrapper}>
+                    <Icon name="account-outline" size={24} color={colors.textSecondary} />
+                  </View>
+                  <TextInput
+                    style={[styles.input, { color: colors.text }]}
+                    placeholder="Entrez votre nom"
+                    placeholderTextColor={colors.textHint}
+                    value={creatorName}
+                    onChangeText={setCreatorName}
+                    maxLength={20}
+                    autoCapitalize="words"
+                  />
+                </LinearGradient>
+              </View>
+              <Text style={[styles.inputHint, { color: colors.textTertiary }]}>
+                Les autres entreront leur pseudo en rejoignant
+              </Text>
+            </View>
+
+            {/* Nombre de joueurs */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Nombre de joueurs</Text>
+              <View style={[styles.playerSelectorCard, { borderColor: colors.cardBorder }]}>
+                <LinearGradient
+                  colors={[colors.card, colors.card]}
+                  style={styles.playerSelectorGradient}
+                >
+                  <TouchableOpacity
+                    style={[styles.playerButton, numPlayers <= 2 && styles.playerButtonDisabled]}
+                    onPress={decrementPlayers}
+                    disabled={numPlayers <= 2}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={numPlayers <= 2 ? [colors.disabled, colors.disabled] : colors.primaryGradient}
+                      style={styles.playerButtonGradient}
+                    >
+                      <Icon name="minus" size={32} color={numPlayers <= 2 ? colors.disabledText : '#fff'} />
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <View style={styles.playerCountContainer}>
+                    <Text style={[styles.playerCount, { color: colors.text }]}>{numPlayers}</Text>
+                    <Text style={[styles.playerCountLabel, { color: colors.textSecondary }]}>joueurs</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.playerButton, numPlayers >= 10 && styles.playerButtonDisabled]}
+                    onPress={incrementPlayers}
+                    disabled={numPlayers >= 10}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={numPlayers >= 10 ? [colors.disabled, colors.disabled] : colors.primaryGradient}
+                      style={styles.playerButtonGradient}
+                    >
+                      <Icon name="plus" size={32} color={numPlayers >= 10 ? colors.disabledText : '#fff'} />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </LinearGradient>
+              </View>
+              <Text style={[styles.playerRange, { color: colors.textTertiary }]}>
+                Entre 2 et 10 joueurs
+              </Text>
+            </View>
+
+            {/* Bouton créer - VRAIMENT CORRIGÉ */}
+            {canCreate ? (
+              <TouchableOpacity
+                style={styles.createButton}
+                onPress={createSession}
+                disabled={loading}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={colors.primaryGradient}
+                  style={styles.createButtonGradient}
+                >
+                  {loading ? (
+                    <View style={{ alignItems: 'center', gap: 12 }}>
+                      <ActivityIndicator color="#fff" size="large" />
+                      <Text style={[styles.createButtonText, { fontSize: 14, opacity: 0.9 }]}>
+                        {loadingMessage}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Icon name="rocket-launch-outline" size={28} color="#fff" />
+                      <Text style={styles.createButtonText}>Créer la Partie</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.createButton, styles.createButtonDisabled]}>
+                <View style={[styles.createButtonDisabledBg, { backgroundColor: colors.disabled }]}>
+                  <Icon name="rocket-launch-outline" size={28} color={colors.disabledText} />
+                  <Text style={[styles.createButtonText, { color: colors.disabledText }]}>
+                    Créer la Partie
+                  </Text>
+                </View>
+              </View>
+            )}
+          </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  themeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
@@ -246,108 +450,148 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+  section: {
+    marginBottom: 28,
+  },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 20,
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  optionContainer: {
+  optionRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
-  optionButton: {
+  optionCard: {
     flex: 1,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  optionCardGradient: {
+    padding: 20,
     alignItems: 'center',
   },
-  optionButtonActive: {
-    borderColor: '#4F46E5',
-    backgroundColor: '#EEF2FF',
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
   },
   optionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 8,
-  },
-  optionTitleActive: {
-    color: '#4F46E5',
+    marginBottom: 4,
   },
   optionDescription: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    marginTop: 4,
+    fontSize: 13,
   },
-  sliderContainer: {
-    marginBottom: 10,
-  },
-  numberButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  numberButton: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#fff',
-    borderRadius: 25,
+  inputCard: {
+    borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  inputGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+  },
+  inputIconWrapper: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 18,
+    fontSize: 17,
+    fontWeight: '500',
+  },
+  inputHint: {
+    fontSize: 13,
+    marginTop: 10,
+    paddingHorizontal: 4,
+  },
+  playerSelectorCard: {
+    borderRadius: 18,
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
+  playerSelectorGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 24,
+    paddingHorizontal: 28,
+  },
+  playerButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  playerButtonDisabled: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+  },
+  playerButtonGradient: {
+    width: 56,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  numberButtonActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#4F46E5',
+  playerCountContainer: {
+    alignItems: 'center',
+    minWidth: 90,
   },
-  numberButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
+  playerCount: {
+    fontSize: 56,
+    fontWeight: '800',
+    lineHeight: 60,
   },
-  numberButtonTextActive: {
-    color: '#fff',
+  playerCountLabel: {
+    fontSize: 14,
+    marginTop: -6,
   },
-  namesContainer: {
-    gap: 10,
-  },
-  nameInput: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    fontSize: 16,
+  playerRange: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
   },
   createButton: {
-    backgroundColor: '#4F46E5',
-    padding: 18,
-    borderRadius: 12,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 15,
+    marginTop: 8,
+  },
+  createButtonDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  createButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 30,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    paddingVertical: 20,
+    gap: 14,
   },
-  createButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+  createButtonDisabledBg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 14,
   },
   createButtonText: {
-    color: '#fff',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
 

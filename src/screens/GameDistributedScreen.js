@@ -7,13 +7,17 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
 
 const GameDistributedScreen = ({ route, navigation }) => {
+  const { colors, isDark, toggleTheme } = useTheme();
   const { sessionId, joinCode, mode, myPlayerId } = route.params;
   const [players, setPlayers] = useState([]);
   const [globalTime, setGlobalTime] = useState(0);
@@ -21,18 +25,25 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [sessionStatus, setSessionStatus] = useState('lobby');
   const [connectedPlayers, setConnectedPlayers] = useState([]);
+  const [playerOrder, setPlayerOrder] = useState([]); // Ordre personnalisé des joueurs dans le lobby
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
-  const isMyTurn = mode === 'sequential' && 
-                   players[currentPlayerIndex]?.id === myPlayerId;
-  const isCreator = myPlayerId === 0; // Le créateur est toujours le joueur 0
+  const isMyTurn = mode === 'sequential' && players[currentPlayerIndex]?.id === myPlayerId;
+  const isCreator = myPlayerId === 0;
 
   const playerIntervalRef = useRef(null);
-  const otherPlayersIntervalRef = useRef(null); // ✅ NOUVEAU timer pour les autres
+  const otherPlayersIntervalRef = useRef(null);
   const playersRef = useRef([]);
 
   useEffect(() => {
     playersRef.current = players;
+  }, [players]);
+
+  // Initialiser l'ordre des joueurs
+  useEffect(() => {
+    if (players.length > 0 && playerOrder.length === 0) {
+      setPlayerOrder(players.map(p => p.id));
+    }
   }, [players]);
 
   useEffect(() => {
@@ -43,11 +54,9 @@ const GameDistributedScreen = ({ route, navigation }) => {
       },
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        // ✅ Réconciliation améliorée pour éviter le recul du chrono
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
-          // Pour TOUS les joueurs en cours, privilégier le temps local s'il est supérieur
           if (localPlayer && serverPlayer.isRunning && localPlayer.isRunning) {
             return {
               ...serverPlayer,
@@ -75,13 +84,11 @@ const GameDistributedScreen = ({ route, navigation }) => {
     };
   }, [sessionId, myPlayerId]);
 
-  // Timer global - somme des temps de tous les joueurs
   useEffect(() => {
     const total = players.reduce((sum, player) => sum + player.time, 0);
     setGlobalTime(total);
   }, [players]);
 
-  // Timer du joueur local uniquement
   useEffect(() => {
     const isRunning = myPlayer?.isRunning || false;
     
@@ -122,7 +129,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
       otherPlayersIntervalRef.current = setInterval(() => {
         setPlayers((prev) => {
           return prev.map((p) => {
-            // Incrémenter les autres joueurs qui sont en cours
             if (p.id !== myPlayerId && p.isRunning) {
               return { ...p, time: p.time + 1 };
             }
@@ -162,7 +168,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
     ApiService.togglePlayer(sessionId, myPlayerId);
   };
 
-  // ✅ Skip un joueur (créateur uniquement)
   const handleSkipPlayer = () => {
     if (!isCreator) {
       Alert.alert('Erreur', 'Seul le créateur peut skip un joueur !');
@@ -189,7 +194,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   };
 
-  // ✅ Pause globale (créateur uniquement)
   const handlePauseAll = () => {
     if (!isCreator) {
       Alert.alert('Erreur', 'Seul le créateur peut mettre en pause globale !');
@@ -199,7 +203,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
     ApiService.pauseAll(sessionId);
   };
 
-  // ✅ Reset (créateur uniquement)
   const handleReset = () => {
     if (!isCreator) {
       Alert.alert('Erreur', 'Seul le créateur peut réinitialiser la partie !');
@@ -230,247 +233,481 @@ const GameDistributedScreen = ({ route, navigation }) => {
     ]);
   };
 
+  // Déplacer un joueur vers le haut dans l'ordre
+  const movePlayerUp = (playerId) => {
+    const currentIndex = playerOrder.indexOf(playerId);
+    if (currentIndex > 0) {
+      const newOrder = [...playerOrder];
+      [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]];
+      setPlayerOrder(newOrder);
+    }
+  };
+
+  // Déplacer un joueur vers le bas dans l'ordre
+  const movePlayerDown = (playerId) => {
+    const currentIndex = playerOrder.indexOf(playerId);
+    if (currentIndex < playerOrder.length - 1) {
+      const newOrder = [...playerOrder];
+      [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
+      setPlayerOrder(newOrder);
+    }
+  };
+
+  // Obtenir les joueurs dans l'ordre personnalisé
+  const getOrderedPlayers = () => {
+    return playerOrder.map(id => players.find(p => p.id === id)).filter(Boolean);
+  };
+
+  // Partager le code de la partie
+  const handleShare = async () => {
+    try {
+      const message = `🎮 Rejoignez ma partie !\n\nCode : ${joinCode}\n\nEntrez ce code dans l'app Timer Multi-Joueurs pour nous rejoindre !`;
+      
+      const result = await Share.share({
+        message: message,
+        title: 'Code de partie - Timer Multi-Joueurs',
+      });
+
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          console.log('Partagé via:', result.activityType);
+        } else {
+          console.log('Partagé avec succès');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        console.log('Partage annulé');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de partager le code');
+      console.error('Erreur partage:', error);
+    }
+  };
+
   if (!myPlayer) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4F46E5" />
-          <Text style={styles.loadingText}>Chargement...</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient colors={colors.background} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Chargement...
+            </Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
-  // Écran de lobby
+  // ÉCRAN DE LOBBY
   if (sessionStatus === 'lobby') {
     const allConnected = connectedPlayers.length === players.length;
 
     return (
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.lobbyContent}>
-          <View style={styles.lobbyHeader}>
-            <Icon name="account-group" size={60} color="#4F46E5" />
-            <Text style={styles.lobbyTitle}>Salle d'Attente</Text>
-            <Text style={styles.lobbySubtitle}>Code de la partie</Text>
-            <Text style={styles.lobbyCode}>{joinCode}</Text>
-            
-            <View style={styles.connectionBadge}>
-              <Icon
-                name={isConnected ? 'wifi' : 'wifi-off'}
-                size={16}
-                color={isConnected ? '#10B981' : '#EF4444'}
-              />
-              <Text style={styles.connectionText}>
-                {isConnected ? 'Connecté' : 'Déconnecté'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.playersStatusContainer}>
-            <Text style={styles.playersStatusTitle}>
-              Joueurs : {connectedPlayers.length}/{players.length}
-            </Text>
-            
-            {players.map((player) => {
-              const isConnectedPlayer = connectedPlayers.includes(player.id);
-              const isMe = player.id === myPlayerId;
+      <LinearGradient colors={colors.background} style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <ScrollView contentContainerStyle={styles.lobbyContent}>
+            {/* Header lobby */}
+            <View style={[styles.lobbyHeader, { backgroundColor: colors.card }]}>
+              <LinearGradient
+                colors={colors.primaryGradient}
+                style={styles.lobbyIcon}
+              >
+                <Icon name="account-group" size={48} color="#fff" />
+              </LinearGradient>
               
-              return (
-                <View key={player.id} style={styles.lobbyPlayerCard}>
-                  <View style={styles.lobbyPlayerInfo}>
-                    <Icon
-                      name={isConnectedPlayer ? 'check-circle' : 'clock-outline'}
-                      size={24}
-                      color={isConnectedPlayer ? '#10B981' : '#9CA3AF'}
-                    />
-                    <Text style={styles.lobbyPlayerName}>
-                      {player.name} {isMe && '(Vous)'}
-                    </Text>
-                  </View>
-                  <Text style={[
-                    styles.lobbyPlayerStatus,
-                    isConnectedPlayer && styles.lobbyPlayerStatusConnected
-                  ]}>
-                    {isConnectedPlayer ? 'Connecté' : 'En attente...'}
+              <Text style={[styles.lobbyTitle, { color: colors.text }]}>
+                Salle d'Attente
+              </Text>
+              
+              <View style={[styles.codeBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(102,126,234,0.1)' }]}>
+                <Text style={[styles.codeLabel, { color: colors.textSecondary }]}>
+                  Code de la partie
+                </Text>
+                <Text style={[styles.codeValue, { color: colors.primary }]}>
+                  {joinCode}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.shareButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(102,126,234,0.15)' }]}
+                  onPress={handleShare}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="share-variant" size={18} color={colors.primary} />
+                  <Text style={[styles.shareButtonText, { color: colors.primary }]}>
+                    Partager le code
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.connectionBadge, { 
+                backgroundColor: isConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' 
+              }]}>
+                <View style={[
+                  styles.connectionDot,
+                  { backgroundColor: isConnected ? colors.success : colors.danger }
+                ]} />
+                <Text style={[
+                  styles.connectionText,
+                  { color: isConnected ? colors.success : colors.danger }
+                ]}>
+                  {isConnected ? 'Connecté' : 'Déconnecté'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Liste des joueurs */}
+            <View style={[styles.playersStatusCard, { backgroundColor: colors.card }]}>
+              <View style={styles.playersStatusHeader}>
+                <Text style={[styles.playersStatusTitle, { color: colors.text }]}>
+                  Joueurs connectés
+                </Text>
+                <View style={[styles.counterBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(102,126,234,0.1)' }]}>
+                  <Text style={[styles.counterText, { color: colors.primary }]}>
+                    {connectedPlayers.length}/{players.length}
                   </Text>
                 </View>
-              );
-            })}
-          </View>
+              </View>
 
-          {allConnected && (
-            <View style={styles.readyBanner}>
-              <Icon name="check-circle" size={24} color="#10B981" />
-              <Text style={styles.readyText}>Tous les joueurs sont prêts !</Text>
+              <View style={styles.playersList}>
+                {getOrderedPlayers().map((player, index) => {
+                  const isPlayerConnected = connectedPlayers.includes(player.id);
+                  const isMe = player.id === myPlayerId;
+                  
+                  return (
+                    <View 
+                      key={player.id} 
+                      style={[
+                        styles.lobbyPlayerCard,
+                        { 
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB',
+                          borderColor: isMe ? colors.primary : 'transparent',
+                          borderWidth: isMe ? 2 : 0,
+                        }
+                      ]}
+                    >
+                      <View style={styles.lobbyPlayerLeft}>
+                        {/* Numéro d'ordre */}
+                        <View style={[
+                          styles.orderNumberBadge,
+                          { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(102,126,234,0.1)' }
+                        ]}>
+                          <Text style={[styles.orderNumber, { color: colors.primary }]}>
+                            {index + 1}
+                          </Text>
+                        </View>
+
+                        <View style={[
+                          styles.lobbyPlayerIcon,
+                          { 
+                            backgroundColor: isPlayerConnected 
+                              ? 'rgba(16, 185, 129, 0.15)' 
+                              : 'rgba(156, 163, 175, 0.15)'
+                          }
+                        ]}>
+                          <Icon
+                            name={isPlayerConnected ? 'check-circle' : 'clock-outline'}
+                            size={24}
+                            color={isPlayerConnected ? colors.success : colors.textTertiary}
+                          />
+                        </View>
+                        <View>
+                          <Text style={[styles.lobbyPlayerName, { color: colors.text }]}>
+                            {player.name} {isMe && '(Vous)'}
+                          </Text>
+                          <Text style={[
+                            styles.lobbyPlayerStatus,
+                            { color: isPlayerConnected ? colors.success : colors.textTertiary }
+                          ]}>
+                            {isPlayerConnected ? 'Prêt' : 'En attente...'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Boutons de réorganisation - visible uniquement pour le créateur */}
+                      {isCreator && (
+                        <View style={styles.reorderButtons}>
+                          <TouchableOpacity
+                            style={[
+                              styles.reorderButton,
+                              { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB' },
+                            ]}
+                            onPress={() => movePlayerUp(player.id)}
+                            disabled={index === 0}
+                            activeOpacity={0.7}
+                          >
+                            <Icon
+                              name="chevron-up"
+                              size={18}
+                              color={index === 0 ? colors.disabled : colors.primary}
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.reorderButton,
+                              { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB' },
+                            ]}
+                            onPress={() => movePlayerDown(player.id)}
+                            disabled={index === playerOrder.length - 1}
+                            activeOpacity={0.7}
+                          >
+                            <Icon
+                              name="chevron-down"
+                              size={18}
+                              color={index === playerOrder.length - 1 ? colors.disabled : colors.primary}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          )}
 
-          {isCreator && (
+            {/* Badge tous prêts */}
+            {allConnected && (
+              <View style={[styles.readyBanner, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                <Icon name="check-circle" size={24} color={colors.success} />
+                <Text style={[styles.readyText, { color: colors.success }]}>
+                  Tous les joueurs sont prêts !
+                </Text>
+              </View>
+            )}
+
+            {/* Boutons */}
+            {isCreator ? (
+              <TouchableOpacity
+                style={styles.startButton}
+                onPress={() => ApiService.startGame(sessionId)}
+                activeOpacity={0.9}
+              >
+                <LinearGradient
+                  colors={allConnected ? colors.primaryGradient : ['#F59E0B', '#D97706']}
+                  style={styles.startButtonGradient}
+                >
+                  <Icon name="play-circle" size={28} color="#fff" />
+                  <Text style={styles.startButtonText}>
+                    {allConnected ? 'Démarrer la Partie' : 'Démarrer Quand Même'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.waitingMessage, { backgroundColor: colors.card }]}>
+                <Icon name="clock-outline" size={24} color={colors.textSecondary} />
+                <Text style={[styles.waitingText, { color: colors.textSecondary }]}>
+                  En attente du lancement par {players[0]?.name}...
+                </Text>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={[
-                styles.startButton,
-                !allConnected && styles.startButtonWarning
-              ]}
-              onPress={() => ApiService.startGame(sessionId)}
+              style={styles.lobbyBackButton}
+              onPress={handleQuit}
+              activeOpacity={0.7}
             >
-              <Icon name="play-circle" size={28} color="#fff" />
-              <Text style={styles.startButtonText}>
-                {allConnected ? 'Démarrer la Partie' : 'Démarrer Quand Même'}
+              <Text style={[styles.lobbyBackButtonText, { color: colors.textSecondary }]}>
+                Quitter
               </Text>
             </TouchableOpacity>
-          )}
-
-          {!isCreator && (
-            <View style={styles.waitingMessage}>
-              <Icon name="clock-outline" size={24} color="#6B7280" />
-              <Text style={styles.waitingText}>
-                En attente du lancement par {players[0]?.name}...
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={styles.lobbyBackButton}
-            onPress={handleQuit}
-          >
-            <Text style={styles.lobbyBackButtonText}>Quitter</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
-  // ✅ Écran de jeu - Header identique à GameSharedScreen
+  // Suite dans le prochain fichier...
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.connectionStatus}>
-              <Icon
-                name={isConnected ? 'wifi' : 'wifi-off'}
-                size={20}
-                color={isConnected ? '#10B981' : '#EF4444'}
-              />
-              <Text style={styles.joinCodeTextSmall}>Code: {joinCode}</Text>
-            </View>
-            <View style={styles.headerButtons}>
-              {/* ✅ Bouton Pause générale - visible uniquement si un joueur est actif ET si créateur */}
-              {isCreator && players.some(p => p.isRunning) && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.pauseAllButton]} 
-                  onPress={handlePauseAll}
-                >
-                  <Icon name="pause-circle" size={24} color="#F59E0B" />
-                </TouchableOpacity>
-              )}
-              {/* ✅ Bouton Skip - uniquement en mode séquentiel ET si créateur */}
-              {isCreator && mode === 'sequential' && (
-                <TouchableOpacity 
-                  style={[styles.iconButton, styles.skipButton]} 
-                  onPress={handleSkipPlayer}
-                >
-                  <Icon name="skip-next" size={24} color="#6366F1" />
-                </TouchableOpacity>
-              )}
-              {/* ✅ Bouton Reset - uniquement pour le créateur */}
-              {isCreator && (
-                <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
-                  <Icon name="refresh" size={24} color="#EF4444" />
-                </TouchableOpacity>
-              )}
-              {/* ✅ Bouton Quitter - toujours visible */}
-              <TouchableOpacity 
-                style={styles.iconButton} 
-                onPress={() => navigation.navigate('PartyStats', { sessionId })}
-              >
-                <Icon name="chart-bar" size={24} color="#4F46E5" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
-                <Icon name="exit-to-app" size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.globalTimeContainer}>
-            <Text style={styles.globalTimeLabel}>Temps Total</Text>
-            <Text style={styles.globalTime}>{formatTime(globalTime)}</Text>
-          </View>
-
-          {mode === 'sequential' && (
-            <Text style={styles.turnText}>
-              {isMyTurn
-                ? "C'est votre tour !"
-                : `Tour de ${players[currentPlayerIndex]?.name}`}
-            </Text>
-          )}
-        </View>
-
-        <View
-          style={[
-            styles.myPlayerCard,
-            myPlayer.isRunning && styles.myPlayerCardActive,
-            isMyTurn && !myPlayer.isRunning && styles.myPlayerCardTurn,
-          ]}
-        >
-          <Text style={styles.myPlayerName}>{myPlayer.name}</Text>
-          <Text style={styles.myPlayerTime}>{formatTime(myPlayer.time)}</Text>
-
-          <TouchableOpacity
-            style={[
-              styles.mainButton,
-              mode === 'sequential' && !isMyTurn && styles.mainButtonDisabled,
-              myPlayer.isRunning ? styles.pauseButton : styles.playButton,
-            ]}
-            onPress={toggleMyPlayer}
-            disabled={mode === 'sequential' && !isMyTurn}
-          >
-            <Icon
-              name={myPlayer.isRunning ? 'pause' : 'play'}
-              size={40}
-              color="#fff"
-            />
-            <Text style={styles.mainButtonText}>
-              {myPlayer.isRunning
-                ? mode === 'sequential'
-                  ? 'Passer au Suivant'
-                  : 'Pause'
-                : 'Démarrer'}
-            </Text>
-          </TouchableOpacity>
-
-          {mode === 'sequential' && !isMyTurn && (
-            <Text style={styles.waitText}>Attendez votre tour</Text>
-          )}
-        </View>
-
-        <View style={styles.otherPlayersSection}>
-          <Text style={styles.sectionTitle}>Autres joueurs</Text>
-          {players
-            .filter((p) => p.id !== myPlayerId)
-            .map((player) => (
-              <View key={player.id} style={styles.otherPlayerCard}>
-                <View style={styles.otherPlayerInfo}>
-                  <Text style={styles.otherPlayerName}>{player.name}</Text>
-                  {player.isRunning && (
-                    <Icon name="play-circle" size={20} color="#10B981" />
-                  )}
-                </View>
-                <Text style={styles.otherPlayerTime}>
-                  {formatTime(player.time)}
+    <LinearGradient colors={colors.background} style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={styles.gameContent}>
+          {/* Header */}
+          <View style={[styles.gameHeader, { backgroundColor: colors.card }]}>
+            <View style={styles.headerTop}>
+              <View style={styles.connectionStatus}>
+                <View style={[
+                  styles.connectionDot,
+                  { backgroundColor: isConnected ? colors.success : colors.danger }
+                ]} />
+                <Text style={[styles.codeText, { color: colors.textSecondary }]}>
+                  Code: {joinCode}
                 </Text>
               </View>
-            ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+              <View style={styles.headerButtons}>
+                {isCreator && players.some(p => p.isRunning) && (
+                  <TouchableOpacity
+                    style={[styles.iconButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#FEF3C7' }]}
+                    onPress={handlePauseAll}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="pause-circle" size={20} color={colors.warning} />
+                  </TouchableOpacity>
+                )}
+                {isCreator && mode === 'sequential' && (
+                  <TouchableOpacity
+                    style={[styles.iconButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E0E7FF' }]}
+                    onPress={handleSkipPlayer}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="skip-next" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+                {isCreator && (
+                  <TouchableOpacity
+                    style={[styles.iconButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#FEE2E2' }]}
+                    onPress={handleReset}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="refresh" size={20} color={colors.danger} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.iconButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#EEF2FF' }]}
+                  onPress={() => navigation.navigate('PartyStats', { sessionId })}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="chart-bar" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.iconButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}
+                  onPress={handleQuit}
+                  activeOpacity={0.7}
+                >
+                  <Icon name="exit-to-app" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Temps global */}
+            <LinearGradient
+              colors={colors.primaryGradient}
+              style={styles.gameGlobalTime}
+            >
+              <Text style={styles.gameGlobalLabel}>Temps Total</Text>
+              <Text style={styles.gameGlobalValue}>{formatTime(globalTime)}</Text>
+            </LinearGradient>
+
+            {mode === 'sequential' && (
+              <View style={[styles.gameTurnBadge, { backgroundColor: isMyTurn ? colors.warning : colors.card }]}>
+                <Icon 
+                  name={isMyTurn ? "account-arrow-right" : "account-clock"} 
+                  size={18} 
+                  color={isMyTurn ? '#fff' : colors.text} 
+                />
+                <Text style={[styles.gameTurnText, { color: isMyTurn ? '#fff' : colors.text }]}>
+                  {isMyTurn ? "C'est votre tour !" : `Tour de ${players[currentPlayerIndex]?.name}`}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Ma carte joueur */}
+          <View
+            style={[
+              styles.myPlayerCard,
+              {
+                backgroundColor: myPlayer.isRunning
+                  ? colors.secondary
+                  : isMyTurn && !myPlayer.isRunning
+                    ? colors.warning
+                    : colors.card,
+                borderColor: myPlayer.isRunning
+                  ? colors.secondary
+                  : isMyTurn && !myPlayer.isRunning
+                    ? colors.warning
+                    : colors.cardBorder,
+              },
+            ]}
+          >
+            <Text style={[styles.myPlayerLabel, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.textSecondary }]}>
+              Votre chrono
+            </Text>
+            <Text style={[styles.myPlayerName, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.text }]}>
+              {myPlayer.name}
+            </Text>
+            <Text style={[styles.myPlayerTime, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.text }]}>
+              {formatTime(myPlayer.time)}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.mainButton}
+              onPress={toggleMyPlayer}
+              disabled={mode === 'sequential' && !isMyTurn}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={
+                  mode === 'sequential' && !isMyTurn
+                    ? [colors.disabled, colors.disabled]
+                    : myPlayer.isRunning
+                      ? ['#F59E0B', '#D97706']
+                      : colors.primaryGradient
+                }
+                style={styles.mainButtonGradient}
+              >
+                <Icon
+                  name={myPlayer.isRunning ? 'pause' : 'play'}
+                  size={32}
+                  color="#fff"
+                />
+                <Text style={styles.mainButtonText}>
+                  {myPlayer.isRunning
+                    ? mode === 'sequential'
+                      ? 'Passer au Suivant'
+                      : 'Pause'
+                    : 'Démarrer'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {mode === 'sequential' && !isMyTurn && (
+              <Text style={[styles.waitText, { color: colors.textSecondary }]}>
+                Attendez votre tour
+              </Text>
+            )}
+          </View>
+
+          {/* Autres joueurs */}
+          <View style={[styles.otherPlayersSection, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Autres joueurs
+            </Text>
+            {players
+              .filter((p) => p.id !== myPlayerId)
+              .map((player) => (
+                <View key={player.id} style={[styles.otherPlayerCard, { 
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB' 
+                }]}>
+                  <View style={styles.otherPlayerLeft}>
+                    <Text style={[styles.otherPlayerName, { color: colors.text }]}>
+                      {player.name}
+                    </Text>
+                    {player.isRunning && (
+                      <View style={styles.runningBadge}>
+                        <View style={[styles.runningDot, { backgroundColor: colors.success }]} />
+                        <Text style={[styles.runningText, { color: colors.success }]}>
+                          En cours
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.otherPlayerTime, { color: colors.text }]}>
+                    {formatTime(player.time)}
+                  </Text>
+                </View>
+              ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  safeArea: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -479,343 +716,414 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 18,
-    color: '#6B7280',
+    fontSize: 16,
   },
-  content: {
-    padding: 20,
+  
+  // LOBBY STYLES
+  lobbyContent: {
+    padding: 24,
+    paddingBottom: 40,
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+  lobbyHeader: {
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
     marginBottom: 20,
-    elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  lobbyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  lobbyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  codeBox: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  codeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  codeValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: 4,
+    fontFamily: 'monospace',
+    marginBottom: 12,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  connectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  connectionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  playersStatusCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  playersStatusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  playersStatusTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  counterBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  counterText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  playersList: {
+    gap: 10,
+  },
+  lobbyPlayerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 14,
+  },
+  lobbyPlayerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  orderNumberBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  reorderButtons: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  reorderButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lobbyPlayerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lobbyPlayerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  lobbyPlayerStatus: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  readyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  readyText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  startButton: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 15,
+    marginBottom: 16,
+  },
+  startButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 14,
+  },
+  startButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  waitingMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  waitingText: {
+    fontSize: 15,
+  },
+  lobbyBackButton: {
+    alignSelf: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  lobbyBackButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // GAME STYLES
+  gameContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  gameHeader: {
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   connectionStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  joinCodeTextSmall: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#9CA3AF',
+  codeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    flexWrap: 'wrap',
   },
   iconButton: {
-    padding: 8,
-  },
-  pauseAllButton: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-  },
-  skipButton: {
-    backgroundColor: '#E0E7FF',
-    borderRadius: 8,
-  },
-  globalTimeContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 8,
   },
-  globalTimeLabel: {
-    fontSize: 14,
-    color: '#4F46E5',
+  gameGlobalTime: {
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  gameGlobalLabel: {
+    fontSize: 13,
     fontWeight: '600',
+    color: '#fff',
+    opacity: 0.9,
+    marginBottom: 2,
   },
-  globalTime: {
-    fontSize: 32,
+  gameGlobalValue: {
+    fontSize: 36,
     fontWeight: 'bold',
-    color: '#4F46E5',
+    color: '#fff',
     fontFamily: 'monospace',
   },
-  turnText: {
-    textAlign: 'center',
-    marginTop: 12,
-    fontSize: 16,
+  gameTurnBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  gameTurnText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
   },
   myPlayerCard: {
-    backgroundColor: '#fff',
-    padding: 24,
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 3,
-    borderColor: '#E5E7EB',
+    padding: 24,
     marginBottom: 20,
-    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  myPlayerCardActive: {
-    borderColor: '#10B981',
-  },
-  myPlayerCardTurn: {
-    borderColor: '#F59E0B',
+  myPlayerLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   myPlayerName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#1F2937',
-    textAlign: 'center',
     marginBottom: 16,
   },
   myPlayerTime: {
     fontSize: 56,
     fontWeight: 'bold',
-    color: '#1F2937',
     fontFamily: 'monospace',
     textAlign: 'center',
     marginBottom: 24,
   },
   mainButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  mainButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
-    borderRadius: 12,
+    paddingVertical: 18,
     gap: 12,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  playButton: {
-    backgroundColor: '#10B981',
-  },
-  pauseButton: {
-    backgroundColor: '#F59E0B',
-  },
-  mainButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-    opacity: 0.6,
   },
   mainButtonText: {
     color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
   },
   waitText: {
     textAlign: 'center',
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
   },
   otherPlayersSection: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 12,
+    elevation: 6,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
+    fontWeight: '700',
+    marginBottom: 16,
   },
   otherPlayerCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 14,
+    marginBottom: 10,
   },
-  otherPlayerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  otherPlayerLeft: {
+    flex: 1,
+    gap: 6,
   },
   otherPlayerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
   },
-  otherPlayerTime: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    fontFamily: 'monospace',
-  },
-  // Styles du lobby
-  lobbyContent: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  lobbyHeader: {
-    alignItems: 'center',
-    marginBottom: 32,
-    backgroundColor: '#fff',
-    padding: 24,
-    borderRadius: 16,
-    width: '100%',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  lobbyTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginTop: 16,
-  },
-  lobbySubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 16,
-  },
-  lobbyCode: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#4F46E5',
-    letterSpacing: 4,
-    marginTop: 8,
-  },
-  connectionBadge: {
+  runningBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
   },
-  connectionText: {
+  runningDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  runningText: {
     fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  playersStatusContainer: {
-    width: '100%',
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  playersStatusTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  lobbyPlayerCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  lobbyPlayerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  lobbyPlayerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  lobbyPlayerStatus: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-  lobbyPlayerStatusConnected: {
-    color: '#10B981',
-    fontWeight: '500',
-  },
-  readyBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#D1FAE5',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    width: '100%',
-  },
-  readyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  startButton: {
-    width: '100%',
-    backgroundColor: '#10B981',
-    padding: 18,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  startButtonWarning: {
-    backgroundColor: '#F59E0B',
-  },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 18,
     fontWeight: '600',
   },
-  waitingMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 16,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    width: '100%',
-  },
-  waitingText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  lobbyBackButton: {
-    marginTop: 20,
-    padding: 12,
-  },
-  lobbyBackButtonText: {
-    color: '#6B7280',
-    fontSize: 16,
-    fontWeight: '500',
+  otherPlayerTime: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
 });
 

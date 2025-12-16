@@ -7,19 +7,22 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
 
 const PartyStatsScreen = ({ route, navigation }) => {
+  const { colors, isDark, toggleTheme } = useTheme();
   const { sessionId } = route.params;
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Charger les stats
   const loadStats = async () => {
     try {
       const data = await ApiService.getPartyStats(sessionId);
@@ -37,7 +40,6 @@ const PartyStatsScreen = ({ route, navigation }) => {
     loadStats();
   }, [sessionId]);
 
-  // Rafraîchir les stats
   const handleRefresh = () => {
     setRefreshing(true);
     loadStats();
@@ -45,177 +47,280 @@ const PartyStatsScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4F46E5" />
-          <Text style={styles.loadingText}>Chargement des statistiques...</Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient colors={colors.background} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Chargement des statistiques...
+            </Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   if (!stats) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={60} color="#EF4444" />
-          <Text style={styles.errorText}>Impossible de charger les stats</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadStats}>
-            <Text style={styles.retryButtonText}>Réessayer</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <LinearGradient colors={colors.background} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.errorContainer}>
+            <Icon name="alert-circle" size={60} color={colors.danger} />
+            <Text style={[styles.errorText, { color: colors.text }]}>
+              Impossible de charger les stats
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={loadStats}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={colors.primaryGradient}
+                style={styles.retryButtonGradient}
+              >
+                <Text style={styles.retryButtonText}>Réessayer</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Header avec infos générales */}
-        <View style={styles.headerCard}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerItem}>
-              <Text style={styles.headerLabel}>Code</Text>
-              <Text style={styles.headerValue}>{stats.joinCode}</Text>
-            </View>
-            <View style={styles.headerItem}>
-              <Text style={styles.headerLabel}>Mode</Text>
-              <Text style={styles.headerValue}>
-                {stats.mode === 'sequential' ? 'Séquentiel' : 'Indépendant'}
-              </Text>
-            </View>
-            <View style={styles.headerItem}>
-              <Text style={styles.headerLabel}>Affichage</Text>
-              <Text style={styles.headerValue}>
-                {stats.displayMode === 'shared' ? 'Partagé' : 'Distribué'}
-              </Text>
-            </View>
-          </View>
-
+    <LinearGradient colors={colors.background} style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
           <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={handleRefresh}
-            disabled={refreshing}
+            style={[styles.backButton, { backgroundColor: colors.card }]}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Icon name="arrow-left" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Statistiques</Text>
+          <TouchableOpacity
+            style={[styles.themeButton, { backgroundColor: colors.card }]}
+            onPress={toggleTheme}
+            activeOpacity={0.7}
           >
             <Icon
-              name="refresh"
-              size={20}
-              color="#4F46E5"
-              style={refreshing && { opacity: 0.5 }}
+              name={isDark ? 'white-balance-sunny' : 'moon-waning-crescent'}
+              size={22}
+              color={colors.text}
             />
-            <Text style={[styles.refreshText, refreshing && { opacity: 0.5 }]}>
-              Actualiser
-            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Temps global */}
-        <View style={styles.globalTimeCard}>
-          <Text style={styles.sectionTitle}>Temps Total</Text>
-          <Text style={styles.globalTime}>{stats.globalTimeFormatted}</Text>
-          <Text style={styles.averageTime}>
-            Moyenne : {stats.averageTimeFormatted}
-          </Text>
-        </View>
-
-        {/* Statut */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <View style={styles.statusItem}>
-              <Icon name="account-group" size={24} color="#6B7280" />
-              <Text style={styles.statusValue}>{stats.totalPlayers}</Text>
-              <Text style={styles.statusLabel}>Joueurs</Text>
-            </View>
-            <View style={styles.statusItem}>
-              <Icon name="wifi" size={24} color="#10B981" />
-              <Text style={styles.statusValue}>{stats.connectedPlayers}</Text>
-              <Text style={styles.statusLabel}>Connectés</Text>
-            </View>
-            <View style={styles.statusItem}>
-              <Icon name="play-circle" size={24} color="#F59E0B" />
-              <Text style={styles.statusValue}>{stats.activePlayers}</Text>
-              <Text style={styles.statusLabel}>Actifs</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Classement */}
-        <View style={styles.rankingCard}>
-          <Text style={styles.sectionTitle}>Classement</Text>
-          {stats.ranking.map((player, index) => (
-            <View
-              key={index}
-              style={[
-                styles.rankingItem,
-                index === 0 && styles.rankingItemFirst,
-              ]}
-            >
-              <View style={styles.rankingLeft}>
-                <View
-                  style={[
-                    styles.rankBadge,
-                    index === 0 && styles.rankBadgeGold,
-                    index === 1 && styles.rankBadgeSilver,
-                    index === 2 && styles.rankBadgeBronze,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.rankNumber,
-                      index < 3 && styles.rankNumberMedal,
-                    ]}
-                  >
-                    {player.rank}
-                  </Text>
-                </View>
-                <Text style={styles.rankingName}>{player.name}</Text>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+        >
+          {/* Info partie */}
+          <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoItem}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Code</Text>
+                <Text style={[styles.infoValue, { color: colors.text }]}>{stats.joinCode}</Text>
               </View>
-              <View style={styles.rankingRight}>
-                <Text style={styles.rankingTime}>{player.timeFormatted}</Text>
-                <Text style={styles.rankingPercentage}>
-                  {player.percentageOfTotal}%
+              <View style={styles.infoItem}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Mode</Text>
+                <Text style={[styles.infoValue, { color: colors.text }]}>
+                  {stats.mode === 'sequential' ? 'Séquentiel' : 'Indépendant'}
+                </Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Affichage</Text>
+                <Text style={[styles.infoValue, { color: colors.text }]}>
+                  {stats.displayMode === 'shared' ? 'Partagé' : 'Distribué'}
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
+          </View>
 
-        {/* Boutons d'action */}
-        <View style={styles.actionsCard}>
+          {/* Temps global */}
+          <LinearGradient
+            colors={colors.primaryGradient}
+            style={styles.globalTimeCard}
+          >
+            <Icon name="clock-outline" size={32} color="#fff" style={{ opacity: 0.9 }} />
+            <Text style={styles.globalTimeLabel}>Temps Total</Text>
+            <Text style={styles.globalTime}>{stats.globalTimeFormatted}</Text>
+            <View style={styles.averageContainer}>
+              <Text style={styles.averageLabel}>Moyenne</Text>
+              <Text style={styles.averageTime}>{stats.averageTimeFormatted}</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Compteurs */}
+          <View style={[styles.countersCard, { backgroundColor: colors.card }]}>
+            <View style={styles.counterItem}>
+              <LinearGradient
+                colors={['rgba(102, 126, 234, 0.15)', 'rgba(118, 75, 162, 0.15)']}
+                style={styles.counterIcon}
+              >
+                <Icon name="account-group" size={28} color={colors.primary} />
+              </LinearGradient>
+              <Text style={[styles.counterValue, { color: colors.text }]}>{stats.totalPlayers}</Text>
+              <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>Joueurs</Text>
+            </View>
+            <View style={styles.counterItem}>
+              <LinearGradient
+                colors={['rgba(16, 185, 129, 0.15)', 'rgba(5, 150, 105, 0.15)']}
+                style={styles.counterIcon}
+              >
+                <Icon name="wifi" size={28} color={colors.success} />
+              </LinearGradient>
+              <Text style={[styles.counterValue, { color: colors.text }]}>{stats.connectedPlayers}</Text>
+              <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>Connectés</Text>
+            </View>
+            <View style={styles.counterItem}>
+              <LinearGradient
+                colors={['rgba(245, 158, 11, 0.15)', 'rgba(217, 119, 6, 0.15)']}
+                style={styles.counterIcon}
+              >
+                <Icon name="play-circle" size={28} color={colors.warning} />
+              </LinearGradient>
+              <Text style={[styles.counterValue, { color: colors.text }]}>{stats.activePlayers}</Text>
+              <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>Actifs</Text>
+            </View>
+          </View>
+
+          {/* Classement */}
+          <View style={[styles.rankingCard, { backgroundColor: colors.card }]}>
+            <View style={styles.rankingHeader}>
+              <Icon name="trophy" size={24} color={colors.warning} />
+              <Text style={[styles.rankingTitle, { color: colors.text }]}>Classement</Text>
+            </View>
+
+            {stats.ranking.map((player, index) => (
+              <LinearGradient
+                key={index}
+                colors={
+                  index === 0
+                    ? ['rgba(245, 158, 11, 0.15)', 'rgba(217, 119, 6, 0.15)']
+                    : isDark
+                      ? ['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.05)']
+                      : ['rgba(102, 126, 234, 0.05)', 'rgba(118, 75, 162, 0.05)']
+                }
+                style={[
+                  styles.rankingItem,
+                  {
+                    borderColor: index === 0 ? colors.warning : colors.cardBorder,
+                  },
+                ]}
+              >
+                <View style={styles.rankingLeft}>
+                  <LinearGradient
+                    colors={
+                      index === 0
+                        ? ['#F59E0B', '#D97706']
+                        : index === 1
+                          ? ['#9CA3AF', '#6B7280']
+                          : index === 2
+                            ? ['#D97706', '#92400E']
+                            : isDark
+                              ? ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.15)']
+                              : ['rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)']
+                    }
+                    style={styles.rankBadge}
+                  >
+                    <Text style={[
+                      styles.rankNumber,
+                      { color: index < 3 ? '#fff' : colors.text }
+                    ]}>
+                      {player.rank}
+                    </Text>
+                  </LinearGradient>
+                  <View>
+                    <Text style={[styles.rankingName, { color: colors.text }]}>
+                      {player.name}
+                    </Text>
+                    <View style={styles.progressBarContainer}>
+                      <LinearGradient
+                        colors={index === 0 ? ['#F59E0B', '#D97706'] : colors.primaryGradient}
+                        style={[styles.progressBar, { width: `${player.percentageOfTotal}%` }]}
+                      />
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.rankingRight}>
+                  <Text style={[styles.rankingTime, { color: colors.text }]}>
+                    {player.timeFormatted}
+                  </Text>
+                  <Text style={[styles.rankingPercentage, { color: colors.textSecondary }]}>
+                    {player.percentageOfTotal}%
+                  </Text>
+                </View>
+              </LinearGradient>
+            ))}
+          </View>
+
+          {/* Bouton retour */}
           <TouchableOpacity
-            style={styles.actionButton}
+            style={styles.backToGameButton}
             onPress={() => navigation.goBack()}
+            activeOpacity={0.9}
           >
-            <Icon name="arrow-left" size={20} color="#fff" />
-            <Text style={styles.actionButtonText}>Retour à la partie</Text>
+            <LinearGradient
+              colors={colors.primaryGradient}
+              style={styles.backToGameGradient}
+            >
+              <Icon name="arrow-left" size={24} color="#fff" />
+              <Text style={styles.backToGameText}>Retour à la partie</Text>
+            </LinearGradient>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonSecondary]}
-            onPress={() => {
-              // TODO: Implémenter l'export des stats (PDF, image, etc.)
-              Alert.alert('Bientôt disponible', 'Export des stats à venir !');
-            }}
-          >
-            <Icon name="share-variant" size={20} color="#4F46E5" />
-            <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>
-              Partager
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  themeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -225,7 +330,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -236,289 +340,220 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 16,
     fontSize: 18,
-    color: '#6B7280',
-    textAlign: 'center',
+    fontWeight: '600',
   },
   retryButton: {
     marginTop: 24,
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  retryButtonGradient: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
   },
   retryButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  headerCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+  infoCard: {
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 16,
-    elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  headerRow: {
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 12,
   },
-  headerItem: {
+  infoItem: {
     alignItems: 'center',
   },
-  headerLabel: {
+  infoLabel: {
     fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  headerValue: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    marginBottom: 6,
   },
-  refreshButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    marginTop: 8,
-  },
-  refreshText: {
-    fontSize: 14,
-    color: '#4F46E5',
-    fontWeight: '500',
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   globalTimeCard: {
-    backgroundColor: '#4F46E5',
-    padding: 24,
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 24,
+    padding: 28,
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    marginBottom: 16,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
+  globalTimeLabel: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
+    color: '#fff',
+    opacity: 0.9,
+    marginTop: 8,
+    marginBottom: 8,
   },
   globalTime: {
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: 'bold',
     color: '#fff',
     fontFamily: 'monospace',
   },
-  averageTime: {
-    fontSize: 16,
-    color: '#E0E7FF',
-    marginTop: 8,
-  },
-  statusCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  statusRow: {
+  averageContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statusItem: {
     alignItems: 'center',
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
   },
-  statusValue: {
-    fontSize: 24,
+  averageLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    opacity: 0.8,
+  },
+  averageTime: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#fff',
+    fontFamily: 'monospace',
   },
-  statusLabel: {
-    fontSize: 12,
-    color: '#6B7280',
+  countersCard: {
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  counterItem: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  counterIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  counterLabel: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   rankingCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    elevation: 2,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  rankingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  rankingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
   },
   rankingItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  rankingItemFirst: {
-    backgroundColor: '#FEF3C7',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#F59E0B',
   },
   rankingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+    flex: 1,
   },
   rankBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  rankBadgeGold: {
-    backgroundColor: '#F59E0B',
-  },
-  rankBadgeSilver: {
-    backgroundColor: '#9CA3AF',
-  },
-  rankBadgeBronze: {
-    backgroundColor: '#D97706',
-  },
   rankNumber: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#6B7280',
-  },
-  rankNumberMedal: {
-    color: '#fff',
   },
   rankingName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  progressBarContainer: {
+    width: 120,
+    height: 6,
+    backgroundColor: 'rgba(156, 163, 175, 0.2)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 3,
   },
   rankingRight: {
     alignItems: 'flex-end',
   },
   rankingTime: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    fontFamily: 'monospace',
-  },
-  rankingPercentage: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  playersCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  playerDetailItem: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  playerDetailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  playerDetailLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  playerDetailName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  playerDetailRank: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  playerDetailStats: {
-    gap: 8,
-  },
-  playerDetailTime: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
     fontFamily: 'monospace',
+    marginBottom: 2,
   },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
+  rankingPercentage: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  backToGameButton: {
+    borderRadius: 18,
     overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 15,
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#4F46E5',
-    borderRadius: 4,
-  },
-  playerDetailPercentage: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'right',
-  },
-  actionsCard: {
-    gap: 12,
-  },
-  actionButton: {
+  backToGameGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#4F46E5',
-    padding: 16,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    paddingVertical: 20,
+    gap: 12,
   },
-  actionButtonSecondary: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#4F46E5',
-  },
-  actionButtonText: {
+  backToGameText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  actionButtonTextSecondary: {
-    color: '#4F46E5',
+    fontSize: 18,
+    fontWeight: '700',
   },
 });
 

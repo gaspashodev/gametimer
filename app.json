@@ -4,22 +4,29 @@
     "slug": "game-timer",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "backgroundColor": "#4F46E5",
     "splash": {
+      "image": "./assets/splash-icon.png",
       "backgroundColor": "#4F46E5",
       "resizeMode": "contain"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.gametimer"
+      "bundleIdentifier": "com.gaspasho.gametimer"
     },
     "android": {
-      "package": "com.yourcompany.gametimer",
+      "package": "com.gaspasho.gametimer",
       "backgroundColor": "#4F46E5"
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ebf0a35e-f0d9-47f5-b2f9-065266781bfd"
+      }
+    }
   }
 }
