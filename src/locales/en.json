@@ -1,0 +1,63 @@
+{
+  "home": {
+    "title": "Multi-Player Timer",
+    "subtitle": "Manage game time in real-time",
+    "newGame": "New Game",
+    "newGameDesc": "Create a session",
+    "join": "Join",
+    "joinDesc": "Enter with a code",
+    "pseudoPlaceholder": "Enter your name"
+  },
+    "config": {
+    "title": "Settings",
+    "gameMode": "Game mode",
+    "turnByTurn": "Turn-based",
+    "turnByTurnDesc": "A player's timer starts when the previous player's timer stops",
+    "simultaneous": "Simultaneous",
+    "simultaneousDesc": "You can start multiple timers at the same time",
+    "displayMode": "Display",
+    "singleScreen": "Single screen",
+    "singleScreenDesc": "All timers are managed on the same screen",
+    "eachScreen": "Individual screens",
+    "eachScreenDesc": "Each player manages their own timer on their device",
+    "playerCount": "Number of players",
+    "createGame": "Create game",
+    "creatingGame": "Creating game...",
+    "numberPlayers": "Please choose between 2 and 10 players.",
+    "selectPseudo": "Please enter your username",
+    "player": "Player",
+    "noConnection": "Connection failed",
+    "errorCreatingGame": "Unable to create the game. Please check your internet connection.",
+    "retry": "Retry"
+    },
+    "join": {
+    "title": "Join a game",
+    "subtitle": "Enter the game code",
+    "codePlaceHolder": "CODE",
+    "joinButton": "Join",
+    "choosePlayer": "Choose a player",
+    "selectPlayer": "Select which player you are",
+    "confirm": "Confirm",
+    "verifCode": "Game not found. Check the code.",
+    "error": "Error",
+    "validCode": "Please enter a valid game code",
+    "homePseudo": "Please enter your username on the home page",
+    "awakeServer": "Waking up the server (15–20 seconds)…",
+    "lookingGame": "Searching for the game…",
+    "anotherPlayer": "Please select your player",
+    "playerAlreadyConnected": "This player is already connected. Please choose another one."
+    },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
+    "contact": "Contact",
+    "about": "About",
+    "version": "Version",
+    "language": "Language",
+    "email": "Email",
+    "website": "Website"
+  }
+}

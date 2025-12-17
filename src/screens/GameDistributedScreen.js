@@ -11,10 +11,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { 
+  Hourglass,
+  UserCheck,
+  UserLock,
+  Share2,
+  ChevronUp,
+  ChevronDown,
+  Check,
+  StepForward,
+  RefreshCw,
+  BarChart3,
+  DoorOpen,
+  Play,
+  Pause,
+} from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const GameDistributedScreen = ({ route, navigation }) => {
   const { colors, isDark, toggleTheme } = useTheme();
@@ -26,6 +41,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [sessionStatus, setSessionStatus] = useState('lobby');
   const [connectedPlayers, setConnectedPlayers] = useState([]);
   const [playerOrder, setPlayerOrder] = useState([]); // Ordre personnalisé des joueurs dans le lobby
+  const { t } = useLanguage();
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
   const isMyTurn = mode === 'sequential' && players[currentPlayerIndex]?.id === myPlayerId;
@@ -34,6 +50,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const playerIntervalRef = useRef(null);
   const otherPlayersIntervalRef = useRef(null);
   const playersRef = useRef([]);
+
 
   useEffect(() => {
     playersRef.current = players;
@@ -308,12 +325,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
           <ScrollView contentContainerStyle={styles.lobbyContent}>
             {/* Header lobby */}
             <View style={[styles.lobbyHeader, { backgroundColor: colors.card }]}>
-              <LinearGradient
-                colors={colors.primaryGradient}
-                style={styles.lobbyIcon}
-              >
-                <Icon name="account-group" size={48} color="#fff" />
-              </LinearGradient>
               
               <Text style={[styles.lobbyTitle, { color: colors.text }]}>
                 Salle d'Attente
@@ -331,7 +342,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                   onPress={handleShare}
                   activeOpacity={0.7}
                 >
-                  <Icon name="share-variant" size={18} color={colors.primary} />
+                  <Share2 size={18} color={colors.primary}  strokeWidth={2} />
                   <Text style={[styles.shareButtonText, { color: colors.primary }]}>
                     Partager le code
                   </Text>
@@ -403,11 +414,11 @@ const GameDistributedScreen = ({ route, navigation }) => {
                               : 'rgba(156, 163, 175, 0.15)'
                           }
                         ]}>
-                          <Icon
-                            name={isPlayerConnected ? 'check-circle' : 'clock-outline'}
-                            size={24}
-                            color={isPlayerConnected ? colors.success : colors.textTertiary}
-                          />
+                          {isPlayerConnected ? (
+                            <Check size={24} color={colors.success} strokeWidth={2} />
+                          ) : (
+                            <Hourglass size={24} color={colors.textTertiary} strokeWidth={2} />
+                          )}
                         </View>
                         <View>
                           <Text style={[styles.lobbyPlayerName, { color: colors.text }]}>
@@ -434,11 +445,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                             disabled={index === 0}
                             activeOpacity={0.7}
                           >
-                            <Icon
-                              name="chevron-up"
-                              size={18}
-                              color={index === 0 ? colors.disabled : colors.primary}
-                            />
+                            <ChevronUp size={18} color={index === 0 ? colors.disabled : colors.primary} strokeWidth={2} />
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={[
@@ -449,11 +456,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                             disabled={index === playerOrder.length - 1}
                             activeOpacity={0.7}
                           >
-                            <Icon
-                              name="chevron-down"
-                              size={18}
-                              color={index === playerOrder.length - 1 ? colors.disabled : colors.primary}
-                            />
+                            <ChevronDown size={18} color={index === playerOrder.length - 1 ? colors.disabled : colors.primary}  strokeWidth={2} />
                           </TouchableOpacity>
                         </View>
                       )}
@@ -466,7 +469,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
             {/* Badge tous prêts */}
             {allConnected && (
               <View style={[styles.readyBanner, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                <Icon name="check-circle" size={24} color={colors.success} />
+              <Check size={24} color={colors.success}  strokeWidth={2} />
                 <Text style={[styles.readyText, { color: colors.success }]}>
                   Tous les joueurs sont prêts !
                 </Text>
@@ -484,7 +487,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
                   colors={allConnected ? colors.primaryGradient : ['#F59E0B', '#D97706']}
                   style={styles.startButtonGradient}
                 >
-                  <Icon name="play-circle" size={28} color="#fff" />
                   <Text style={styles.startButtonText}>
                     {allConnected ? 'Démarrer la Partie' : 'Démarrer Quand Même'}
                   </Text>
@@ -492,7 +494,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
               </TouchableOpacity>
             ) : (
               <View style={[styles.waitingMessage, { backgroundColor: colors.card }]}>
-                <Icon name="clock-outline" size={24} color={colors.textSecondary} />
                 <Text style={[styles.waitingText, { color: colors.textSecondary }]}>
                   En attente du lancement par {players[0]?.name}...
                 </Text>
@@ -514,7 +515,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
     );
   }
 
-  // Suite dans le prochain fichier...
+  const ActionIcon = myPlayer.isRunning ? Pause : Play;
+  const PlayerTurnIcon = isMyTurn ? UserCheck : UserLock;
   return (
     <LinearGradient colors={colors.background} style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -539,7 +541,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                     onPress={handlePauseAll}
                     activeOpacity={0.7}
                   >
-                    <Icon name="pause-circle" size={20} color={colors.warning} />
+                    <Pause size={20} color={colors.warning}  strokeWidth={2} />
                   </TouchableOpacity>
                 )}
                 {isCreator && mode === 'sequential' && (
@@ -548,7 +550,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                     onPress={handleSkipPlayer}
                     activeOpacity={0.7}
                   >
-                    <Icon name="skip-next" size={20} color={colors.primary} />
+                    <StepForward size={20} color={colors.primary}  strokeWidth={2} />
                   </TouchableOpacity>
                 )}
                 {isCreator && (
@@ -557,7 +559,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                     onPress={handleReset}
                     activeOpacity={0.7}
                   >
-                    <Icon name="refresh" size={20} color={colors.danger} />
+                    <RefreshCw size={20} color={colors.danger}  strokeWidth={2} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -565,14 +567,14 @@ const GameDistributedScreen = ({ route, navigation }) => {
                   onPress={() => navigation.navigate('PartyStats', { sessionId })}
                   activeOpacity={0.7}
                 >
-                  <Icon name="chart-bar" size={20} color={colors.primary} />
+                  <BarChart3 size={20} color={colors.primary}  strokeWidth={2} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.iconButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F3F4F6' }]}
                   onPress={handleQuit}
                   activeOpacity={0.7}
                 >
-                  <Icon name="exit-to-app" size={20} color={colors.textSecondary} />
+                  <DoorOpen size={20} color={colors.textSecondary}  strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -588,11 +590,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
             {mode === 'sequential' && (
               <View style={[styles.gameTurnBadge, { backgroundColor: isMyTurn ? colors.warning : colors.card }]}>
-                <Icon 
-                  name={isMyTurn ? "account-arrow-right" : "account-clock"} 
-                  size={18} 
-                  color={isMyTurn ? '#fff' : colors.text} 
-                />
+                <PlayerTurnIcon size={18} color={isMyTurn ? '#fff' : colors.text} strokeWidth={2} />
+
                 <Text style={[styles.gameTurnText, { color: isMyTurn ? '#fff' : colors.text }]}>
                   {isMyTurn ? "C'est votre tour !" : `Tour de ${players[currentPlayerIndex]?.name}`}
                 </Text>
@@ -644,11 +643,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 }
                 style={styles.mainButtonGradient}
               >
-                <Icon
-                  name={myPlayer.isRunning ? 'pause' : 'play'}
-                  size={32}
-                  color="#fff"
-                />
+                <ActionIcon size={32} color="#fff" strokeWidth={2} />
                 <Text style={styles.mainButtonText}>
                   {myPlayer.isRunning
                     ? mode === 'sequential'

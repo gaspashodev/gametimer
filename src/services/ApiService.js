@@ -1,12 +1,16 @@
 import axios from 'axios';
 import io from 'socket.io-client';
 
-// Remplacez par l'URL de votre serveur en production
-// Pour le développement local sur Android, utilisez 10.0.2.2 au lieu de localhost
-// Pour iOS, utilisez l'IP locale de votre machine
-export const API_URL = __DEV__ 
-  ? 'http://192.168.1.32:3001' // Votre IP locale pour dev
-  : 'https://game-timer-backend-production.up.railway.app'; // ✅ URL Railway en production
+// ⚠️ IMPORTANT : Forcer Railway même en DEV pour tester
+// Railway fonctionne, mais Expo Go bloque parfois les connexions externes
+export const API_URL = 'https://game-timer-backend-production.up.railway.app';
+
+// Alternative si tu veux garder le switch local/prod :
+// export const API_URL = __DEV__ 
+//   ? 'http://10.30.86.28:3001' // Serveur local
+//   : 'https://game-timer-backend-production.up.railway.app'; // Railway
+
+console.log('🌐 API_URL configurée :', API_URL);
 
 class ApiService {
   constructor() {
@@ -18,15 +22,19 @@ class ApiService {
   // Créer une nouvelle session
   async createSession(mode, numPlayers, displayMode, playerNames) {
     try {
+      console.log('📡 Création session vers:', `${API_URL}/api/sessions`);
       const response = await axios.post(`${API_URL}/api/sessions`, {
         mode,
         numPlayers,
         displayMode,
         playerNames
+      }, {
+        timeout: 30000 // 30 secondes
       });
+      console.log('✅ Session créée:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la création de la session:', error);
+      console.log('❌ Erreur création:', error.message);
       throw error;
     }
   }
@@ -37,7 +45,6 @@ class ApiService {
       const response = await axios.get(`${API_URL}/api/sessions/join/${joinCode}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la connexion à la session:', error);
       throw error;
     }
   }
@@ -48,53 +55,48 @@ class ApiService {
       const response = await axios.get(`${API_URL}/api/sessions/${sessionId}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération de la session:', error);
       throw error;
     }
   }
 
-  // ✅ NOUVEAU : Obtenir toutes les sessions actives
+  // Obtenir toutes les sessions actives
   async getAllSessions() {
     try {
       const response = await axios.get(`${API_URL}/api/sessions`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des sessions:', error);
       throw error;
     }
   }
 
   // ===== STATS & ANALYTICS =====
 
-  // ✅ NOUVEAU : Récupérer les stats complètes d'une partie
+  // Récupérer les stats complètes d'une partie
   async getPartyStats(sessionId) {
     try {
       const response = await axios.get(`${API_URL}/api/party/${sessionId}/stats`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des stats:', error);
       throw error;
     }
   }
 
-  // ✅ NOUVEAU : Récupérer le temps d'un joueur spécifique
+  // Récupérer le temps d'un joueur spécifique
   async getPlayerTime(sessionId, playerId) {
     try {
       const response = await axios.get(`${API_URL}/api/party/${sessionId}/player/${playerId}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération du temps joueur:', error);
       throw error;
     }
   }
 
-  // ✅ NOUVEAU : Récupérer les données stream (format simplifié pour OBS/overlay)
+  // Récupérer les données stream (format simplifié pour OBS/overlay)
   async getStreamData(sessionId) {
     try {
       const response = await axios.get(`${API_URL}/api/stream/${sessionId}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des données stream:', error);
       throw error;
     }
   }
@@ -107,6 +109,7 @@ class ApiService {
       this.socket.disconnect();
     }
 
+    console.log('🔌 Connexion WebSocket vers:', API_URL);
     this.socket = io(API_URL, {
       transports: ['websocket'],
       reconnection: true,
@@ -116,13 +119,13 @@ class ApiService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Socket connecté');
+      console.log('✅ Socket connecté');
       this.socket.emit('join-session', sessionId);
       if (callbacks.onConnect) callbacks.onConnect();
     });
 
     this.socket.on('disconnect', () => {
-      console.log('Socket déconnecté');
+      console.log('🔌 Socket déconnecté');
       if (callbacks.onDisconnect) callbacks.onDisconnect();
     });
 
@@ -131,7 +134,8 @@ class ApiService {
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('Erreur de connexion socket:', error);
+      console.log('❌ Erreur socket:', error.message);
+      if (callbacks.onDisconnect) callbacks.onDisconnect();
     });
 
     return this.socket;

@@ -1,20 +1,61 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { 
+  Timer,
+  AlarmClockPlus,
+  LogIn,
+  Settings,
+  UserCircle,
+  X,
+  ChevronRight,
+} from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
-
-const { width } = Dimensions.get('window');
+import StorageService from '../services/StorageService';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const HomeScreen = ({ navigation }) => {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark } = useTheme();
+  const [pseudo, setPseudo] = useState('');
+  const { t } = useLanguage();
+
+  // ✅ Charger le pseudo sauvegardé au démarrage
+  useEffect(() => {
+    loadSavedPseudo();
+  }, []);
+
+  const loadSavedPseudo = async () => {
+    const saved = await StorageService.getPseudo();
+    if (saved) {
+      setPseudo(saved);
+    }
+  };
+
+  // ✅ Sauvegarder automatiquement quand le pseudo change
+  const handlePseudoChange = async (text) => {
+    setPseudo(text);
+    if (text.trim()) {
+      await StorageService.savePseudo(text.trim());
+    }
+  };
+
+  const handleNavigateToConfig = () => {
+    Keyboard.dismiss();
+    navigation.navigate('Config');
+  };
+
+  const handleNavigateToJoin = () => {
+    Keyboard.dismiss();
+    navigation.navigate('Join');
+  };
 
   return (
     <LinearGradient
@@ -24,20 +65,18 @@ const HomeScreen = ({ navigation }) => {
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.content}>
           {/* Theme toggle button */}
-          <View style={styles.themeToggleContainer}>
+        <View style={styles.settingsButtonContainer}>
             <TouchableOpacity
-              style={[styles.themeToggle, { backgroundColor: colors.card }]}
-              onPress={toggleTheme}
+              style={[styles.iconButton, { backgroundColor: colors.card }]}
+              onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.7}
             >
-              <Icon 
-                name={isDark ? 'white-balance-sunny' : 'moon-waning-crescent'} 
-                size={24} 
-                color={colors.text} 
-              />
+              <Settings size={24} color={colors.text} strokeWidth={2} />
             </TouchableOpacity>
           </View>
 
+        {/* Contenu centré verticalement */}
+        <View style={styles.centeredContent}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
@@ -47,95 +86,89 @@ const HomeScreen = ({ navigation }) => {
                 end={{ x: 1, y: 1 }}
                 style={styles.iconGradient}
               >
-                <Icon name="timer-sand" size={64} color="#fff" />
+                <Timer size={64} color="#fff" strokeWidth={2} />
               </LinearGradient>
-              <View style={[styles.glowEffect, { backgroundColor: colors.primary }]} />
             </View>
-            <Text style={[styles.title, { color: colors.text }]}>Timer Multi-Joueurs</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('home.title')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Gérez le temps de jeu en temps réel
+              {t('home.subtitle')}
             </Text>
+          </View>
+
+          {/* ✨ NOUVEAU : Input pseudo sur la home */}
+          <View style={styles.pseudoSection}>
+            <View style={[styles.pseudoInputCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <UserCircle size={22} color={colors.textSecondary} strokeWidth={2} />
+              <TextInput
+                style={[styles.pseudoInput, { color: colors.text }]}
+                placeholder={t('home.pseudoPlaceholder')}
+                placeholderTextColor={colors.textSecondary}
+                value={pseudo}
+                onChangeText={handlePseudoChange}
+                maxLength={20}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+              {pseudo.trim() && (
+                <TouchableOpacity
+                  onPress={() => handlePseudoChange('')}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <X size={20} color={colors.textTertiary} strokeWidth={2} />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           {/* Cartes */}
           <View style={styles.cardsContainer}>
             <TouchableOpacity
-              style={styles.cardWrapper}
-              onPress={() => navigation.navigate('Config')}
-              activeOpacity={0.9}
+              style={[
+                styles.card,
+                { 
+                  backgroundColor: colors.card,
+                  borderColor: colors.cardBorder,
+                }
+              ]}
+              onPress={handleNavigateToConfig}
+              activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={isDark 
-                  ? ['rgba(102, 126, 234, 0.15)', 'rgba(118, 75, 162, 0.15)']
-                  : ['rgba(102, 126, 234, 0.12)', 'rgba(118, 75, 162, 0.12)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.card, { 
-                  borderColor: isDark ? colors.cardBorder : 'rgba(102, 126, 234, 0.2)',
-                  backgroundColor: isDark ? 'transparent' : '#fff',
-                }]}
-              >
-                <View style={styles.cardContent}>
-                  <View style={styles.cardIconWrapper}>
-                    <LinearGradient
-                      colors={colors.primaryGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.cardIconCircle}
-                    >
-                      <Icon name="plus-circle" size={28} color="#fff" />
-                    </LinearGradient>
-                  </View>
-                  <View style={styles.cardTextContainer}>
-                    <Text style={[styles.cardTitle, { color: colors.text }]}>Nouvelle Partie</Text>
-                    <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>Créer une session</Text>
-                  </View>
-                  <Icon name="chevron-right" size={24} color={colors.textTertiary} />
+              <View style={styles.cardContent}>
+                <View style={[styles.cardIconCircle, { backgroundColor: colors.primary }]}>
+                  <AlarmClockPlus size={28} color="#fff" strokeWidth={2} />
                 </View>
-              </LinearGradient>
+                <View style={styles.cardTextContainer}>
+                  <Text style={[styles.cardTitle, { color: colors.text }]}>{t('home.newGame')}</Text>
+                  <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>{t('home.newGameDesc')}</Text>
+                </View>
+                  <ChevronRight size={24} color={colors.textTertiary} strokeWidth={2} />
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.cardWrapper}
-              onPress={() => navigation.navigate('Join')}
-              activeOpacity={0.9}
+              style={[
+                styles.card,
+                { 
+                  backgroundColor: colors.card,
+                  borderColor: colors.cardBorder,
+                }
+              ]}
+              onPress={handleNavigateToJoin}
+              activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={isDark 
-                  ? ['rgba(17, 153, 142, 0.15)', 'rgba(56, 239, 125, 0.15)']
-                  : ['rgba(17, 153, 142, 0.12)', 'rgba(56, 239, 125, 0.12)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.card, { 
-                  borderColor: isDark ? colors.cardBorder : 'rgba(17, 153, 142, 0.2)',
-                  backgroundColor: isDark ? 'transparent' : '#fff',
-                }]}
-              >
-                <View style={styles.cardContent}>
-                  <View style={styles.cardIconWrapper}>
-                    <LinearGradient
-                      colors={colors.secondaryGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.cardIconCircle}
-                    >
-                      <Icon name="login-variant" size={28} color="#fff" />
-                    </LinearGradient>
-                  </View>
-                  <View style={styles.cardTextContainer}>
-                    <Text style={[styles.cardTitle, { color: colors.text }]}>Rejoindre</Text>
-                    <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>Entrer avec un code</Text>
-                  </View>
-                  <Icon name="chevron-right" size={24} color={colors.textTertiary} />
+              <View style={styles.cardContent}>
+                <View style={[styles.cardIconCircle, { backgroundColor: colors.secondary }]}>
+                  <LogIn size={28} color="#fff" strokeWidth={2} />
                 </View>
-              </LinearGradient>
+                <View style={styles.cardTextContainer}>
+                  <Text style={[styles.cardTitle, { color: colors.text }]}>{t('home.join')}</Text>
+                  <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>{t('home.joinDesc')}</Text>
+                </View>
+                  <ChevronRight size={24} color={colors.textTertiary} strokeWidth={2} />              
+                  </View>
             </TouchableOpacity>
           </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: colors.textHint }]}>Version 1.0.0</Text>
-          </View>
+        </View>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -152,109 +185,95 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: 'space-between',
-    paddingTop: 20,
-    paddingBottom: 32,
   },
-  themeToggleContainer: {
+  settingsButtonContainer: {
     alignItems: 'flex-end',
-    marginBottom: 10,
+    paddingTop: 16,
   },
-  themeToggle: {
+  centeredContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  iconButton: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   header: {
     alignItems: 'center',
-    marginTop: 20,
+    marginBottom: 32,
   },
   iconContainer: {
-    position: 'relative',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   iconGradient: {
     width: 120,
     height: 120,
-    borderRadius: 32,
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
-    elevation: 20,
-  },
-  glowEffect: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    opacity: 0.2,
-    transform: [{ scale: 1.3 }],
-    zIndex: -1,
   },
   title: {
-    fontSize: 36,
-    fontWeight: '800',
-    marginBottom: 12,
+    fontSize: 32,
+    fontWeight: 'bold',
     textAlign: 'center',
-    letterSpacing: -0.5,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
-    lineHeight: 24,
+    paddingHorizontal: 20,
+  },
+  pseudoSection: {
+    marginBottom: 24,
+  },
+  pseudoLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  pseudoInputCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  pseudoInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
   },
   cardsContainer: {
-    gap: 20,
-  },
-  cardWrapper: {
-    position: 'relative',
+    gap: 16,
+    paddingBottom: 24,
   },
   card: {
-    borderRadius: 24,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 20,
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 24,
     gap: 16,
   },
-  cardIconWrapper: {
-    position: 'relative',
-  },
   cardIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
   },
   cardTextContainer: {
     flex: 1,
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     marginBottom: 4,
   },
@@ -263,9 +282,10 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
+    paddingBottom: 20,
   },
   footerText: {
-    fontSize: 13,
+    fontSize: 12,
   },
 });
 

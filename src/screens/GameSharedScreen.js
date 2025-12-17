@@ -6,14 +6,23 @@ import {
   StyleSheet,
   FlatList,
   Alert,
-  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { 
+  Hourglass,
+  Timer,
+  PauseCircle,
+  RefreshCw,
+  BarChart3,
+  DoorOpen,
+  Play,
+  Pause,
+} from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const GameSharedScreen = ({ route, navigation }) => {
   const { colors, isDark, toggleTheme } = useTheme();
@@ -22,6 +31,8 @@ const GameSharedScreen = ({ route, navigation }) => {
   const [globalTime, setGlobalTime] = useState(0);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const { t } = useLanguage();
 
   const playerIntervalsRef = useRef({});
   const globalTimeRef = useRef(0);
@@ -55,6 +66,11 @@ const GameSharedScreen = ({ route, navigation }) => {
         
         setPlayers(updatedPlayers);
         setCurrentPlayerIndex(session.currentPlayerIndex);
+        
+        // ✅ NOUVEAU : Marquer comme chargé dès qu'on a les données
+        if (isLoading && updatedPlayers.length > 0) {
+          setIsLoading(false);
+        }
       },
     };
 
@@ -156,6 +172,7 @@ const GameSharedScreen = ({ route, navigation }) => {
   const renderPlayer = ({ item: player, index }) => {
     const isCurrentTurn = mode === 'sequential' && index === currentPlayerIndex;
     const canInteract = mode === 'independent' || isCurrentTurn;
+    const ActionIcon = player.isRunning ? Pause : Play;
 
     return (
       <View style={styles.playerCardWrapper}>
@@ -184,10 +201,7 @@ const GameSharedScreen = ({ route, navigation }) => {
           </Text>
           
           <TouchableOpacity
-            style={[
-              styles.playerButton,
-              !canInteract && styles.playerButtonDisabled,
-            ]}
+            style={styles.playerButton}
             onPress={() => togglePlayer(player.id)}
             disabled={!canInteract}
             activeOpacity={0.8}
@@ -202,11 +216,8 @@ const GameSharedScreen = ({ route, navigation }) => {
               }
               style={styles.playerButtonGradient}
             >
-              <Icon
-                name={player.isRunning ? 'pause' : 'play'}
-                size={20}
-                color="#fff"
-              />
+              <ActionIcon size={20} color="#fff" strokeWidth={2} />
+
               <Text style={styles.playerButtonText}>
                 {player.isRunning
                   ? mode === 'sequential'
@@ -224,8 +235,18 @@ const GameSharedScreen = ({ route, navigation }) => {
   return (
     <LinearGradient colors={colors.background} style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
+        {/* ✅ NOUVEAU : Afficher loading tant que pas de données */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <Hourglass size={64} color={colors.primary} strokeWidth={2} />
+            <Text style={[styles.loadingText, { color: colors.text }]}>
+              Chargement de la partie...
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* ✅ NOUVEAU : Header FIXE (non scrollable) */}
+            <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
           <View style={styles.headerTop}>
             <View style={styles.connectionStatus}>
               <View style={[
@@ -244,7 +265,7 @@ const GameSharedScreen = ({ route, navigation }) => {
                   onPress={pauseAll}
                   activeOpacity={0.7}
                 >
-                  <Icon name="pause-circle" size={22} color={colors.warning} />
+                  <PauseCircle size={22} color={colors.warning} strokeWidth={2} />
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -252,26 +273,26 @@ const GameSharedScreen = ({ route, navigation }) => {
                 onPress={handleReset}
                 activeOpacity={0.7}
               >
-                <Icon name="refresh" size={22} color={colors.danger} />
+                <RefreshCw size={22} color={colors.danger} strokeWidth={2} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.card }]}
                 onPress={() => navigation.navigate('PartyStats', { sessionId })}
                 activeOpacity={0.7}
               >
-                <Icon name="chart-bar" size={22} color={colors.primary} />
+                <BarChart3 size={22} color={colors.primary} strokeWidth={2} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.card }]}
                 onPress={handleQuit}
                 activeOpacity={0.7}
               >
-                <Icon name="exit-to-app" size={22} color={colors.textSecondary} />
+                <DoorOpen size={22} color={colors.textSecondary} strokeWidth={2} />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Temps global */}
+          {/* Temps global - ✅ GARDÉ : Dégradé sur élément principal */}
           <LinearGradient
             colors={colors.primaryGradient}
             style={styles.globalTimeCard}
@@ -282,7 +303,7 @@ const GameSharedScreen = ({ route, navigation }) => {
 
           {mode === 'sequential' && (
             <View style={[styles.turnBadge, { backgroundColor: colors.card }]}>
-              <Icon name="account-arrow-right" size={20} color={colors.text} />
+              <Timer size={20} color={colors.text}  strokeWidth={2} />
               <Text style={[styles.turnText, { color: colors.text }]}>
                 Tour de {players[currentPlayerIndex]?.name}
               </Text>
@@ -290,7 +311,7 @@ const GameSharedScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Grille des joueurs */}
+        {/* Grille scrollable séparée */}
         <FlatList
           data={players}
           renderItem={renderPlayer}
@@ -300,6 +321,8 @@ const GameSharedScreen = ({ route, navigation }) => {
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
         />
+          </>
+        )}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -311,6 +334,16 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     paddingHorizontal: 20,
@@ -395,8 +428,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
+  // ✅ FIX : Wrapper pour forcer 50% même avec joueurs impairs
   playerCardWrapper: {
     flex: 1,
+    maxWidth: '50%',
   },
   playerCard: {
     borderRadius: 20,
@@ -422,9 +457,6 @@ const styles = StyleSheet.create({
   playerButton: {
     borderRadius: 12,
     overflow: 'hidden',
-  },
-  playerButtonDisabled: {
-    opacity: 0.5,
   },
   playerButtonGradient: {
     flexDirection: 'row',

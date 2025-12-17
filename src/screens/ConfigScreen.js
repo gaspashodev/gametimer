@@ -1,34 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  TextInput,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
+import { 
+  ArrowLeft,
+  CircleArrowUp,
+  CircleFadingArrowUp,
+  Smartphone,
+  Wifi,
+  Minus,
+  Plus,
+} from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
+import StorageService from '../services/StorageService';
+import LoadingOverlay from '../components/LoadingOverlay';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const ConfigScreen = ({ navigation }) => {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark } = useTheme();
   const [mode, setMode] = useState('sequential');
   const [displayMode, setDisplayMode] = useState('shared');
   const [numPlayers, setNumPlayers] = useState(4);
   const [creatorName, setCreatorName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Création de la partie...');
+  const { t } = useLanguage();
+  const [loadingMessage, setLoadingMessage] = useState(t('join.creatingGame'));
 
-  // Fonction pour vérifier si on est dans les heures de réveil lent
-  const isSlowWakeupTime = () => {
-    const hour = new Date().getHours();
-    // Entre 2h et 11h du matin (réveil lent)
-    return hour >= 2 && hour < 11;
+  // ✅ Charger le pseudo sauvegardé au démarrage
+  useEffect(() => {
+    loadSavedPseudo();
+  }, []);
+
+  const loadSavedPseudo = async () => {
+    const savedPseudo = await StorageService.getPseudo();
+    if (savedPseudo) {
+      setCreatorName(savedPseudo);
+    }
   };
 
   const incrementPlayers = () => {
@@ -41,28 +56,33 @@ const ConfigScreen = ({ navigation }) => {
 
   const createSession = async () => {
     if (numPlayers < 2 || numPlayers > 10) {
-      Alert.alert('Erreur', 'Veuillez choisir entre 2 et 10 joueurs');
+      Alert.alert(t('join.error'), t('config.numberPlayers'));
       return;
     }
 
     if (!creatorName.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre pseudo');
+      Alert.alert(t('join.error'), t('config.selectPseudo'));
       return;
     }
 
     setLoading(true);
     
     // Message adaptatif selon l'heure
+    const isSlowWakeupTime = () => {
+      const hour = new Date().getHours();
+      return hour >= 0 && hour < 9;
+    };
+    
     if (isSlowWakeupTime()) {
-      setLoadingMessage('Réveil du serveur en cours (15-20 secondes)...');
+      setLoadingMessage(t('join.awakeServer'));
     } else {
-      setLoadingMessage('Création de la partie...');
+      setLoadingMessage(t('config.creatingGame'));
     }
     
     try {
       const playerNames = [creatorName.trim()];
       for (let i = 1; i < numPlayers; i++) {
-        playerNames.push(`Joueur ${i + 1}`);
+        playerNames.push(t('config.player')` ${i + 1}`);
       }
       
       const data = await ApiService.createSession(
@@ -90,11 +110,10 @@ const ConfigScreen = ({ navigation }) => {
       }
     } catch (error) {
       setLoading(false);
-      console.error('Erreur création session:', error);
       Alert.alert(
-        'Connexion impossible',
-        'Impossible de créer la partie. Vérifiez votre connexion internet.',
-        [{ text: 'Réessayer', onPress: () => {} }]
+        t('config.noConnection'),
+        t('config.errorCreatingGame'),
+        [{ text: t('config.retry'), onPress: () => {} }]
       );
     }
   };
@@ -114,20 +133,9 @@ const ConfigScreen = ({ navigation }) => {
             onPress={() => navigation.goBack()}
             activeOpacity={0.7}
           >
-            <Icon name="arrow-left" size={24} color={colors.text} />
+          <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Nouvelle Partie</Text>
-          <TouchableOpacity 
-            style={[styles.themeButton, { backgroundColor: colors.card }]}
-            onPress={toggleTheme}
-            activeOpacity={0.7}
-          >
-            <Icon 
-              name={isDark ? 'white-balance-sunny' : 'moon-waning-crescent'} 
-              size={22} 
-              color={colors.text} 
-            />
-          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('home.newGame')}</Text>
         </View>
 
         <ScrollView 
@@ -137,275 +145,214 @@ const ConfigScreen = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
-            {/* Mode de jeu */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Mode de jeu</Text>
-              <View style={styles.optionRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.optionCard, 
-                    { borderColor: mode === 'sequential' ? colors.primary : colors.cardBorder }
-                  ]}
-                  onPress={() => setMode('sequential')}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={mode === 'sequential' 
-                      ? (isDark ? ['rgba(102, 126, 234, 0.2)', 'rgba(118, 75, 162, 0.2)'] : ['rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)'])
-                      : [colors.card, colors.card]}
-                    style={styles.optionCardGradient}
-                  >
-                    <View style={[
-                      styles.iconCircle, 
-                      { backgroundColor: mode === 'sequential' ? colors.primary : colors.card }
-                    ]}>
-                      <Icon 
-                        name="play-circle-outline" 
-                        size={32} 
-                        color={mode === 'sequential' ? '#fff' : colors.textSecondary} 
-                      />
-                    </View>
-                    <Text style={[
-                      styles.optionTitle, 
-                      { color: mode === 'sequential' ? colors.text : colors.textSecondary }
-                    ]}>
-                      Séquentiel
-                    </Text>
-                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
-                      Tour par tour
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.optionCard,
-                    { borderColor: mode === 'independent' ? colors.primary : colors.cardBorder }
-                  ]}
-                  onPress={() => setMode('independent')}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={mode === 'independent' 
-                      ? (isDark ? ['rgba(102, 126, 234, 0.2)', 'rgba(118, 75, 162, 0.2)'] : ['rgba(102, 126, 234, 0.1)', 'rgba(118, 75, 162, 0.1)'])
-                      : [colors.card, colors.card]}
-                    style={styles.optionCardGradient}
-                  >
-                    <View style={[
-                      styles.iconCircle,
-                      { backgroundColor: mode === 'independent' ? colors.primary : colors.card }
-                    ]}>
-                      <Icon 
-                        name="timer-outline" 
-                        size={32} 
-                        color={mode === 'independent' ? '#fff' : colors.textSecondary} 
-                      />
-                    </View>
-                    <Text style={[
-                      styles.optionTitle,
-                      { color: mode === 'independent' ? colors.text : colors.textSecondary }
-                    ]}>
-                      Indépendant
-                    </Text>
-                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
-                      Simultané
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
 
             {/* Mode d'affichage */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Affichage</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('config.displayMode')}</Text>
               <View style={styles.optionRow}>
                 <TouchableOpacity
                   style={[
                     styles.optionCard,
-                    { borderColor: displayMode === 'shared' ? colors.secondary : colors.cardBorder }
+                    { 
+                      backgroundColor: displayMode === 'shared' 
+                        ? (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.08)')
+                        : colors.card,
+                      borderColor: displayMode === 'shared' ? colors.secondary : colors.cardBorder 
+                    }
                   ]}
                   onPress={() => setDisplayMode('shared')}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={displayMode === 'shared' 
-                      ? (isDark ? ['rgba(17, 153, 142, 0.2)', 'rgba(56, 239, 125, 0.2)'] : ['rgba(17, 153, 142, 0.1)', 'rgba(56, 239, 125, 0.1)'])
-                      : [colors.card, colors.card]}
-                    style={styles.optionCardGradient}
-                  >
-                    <View style={[
-                      styles.iconCircle,
-                      { backgroundColor: displayMode === 'shared' ? colors.secondary : colors.card }
-                    ]}>
-                      <Icon 
-                        name="tablet" 
-                        size={32} 
-                        color={displayMode === 'shared' ? '#fff' : colors.textSecondary} 
-                      />
-                    </View>
-                    <Text style={[
-                      styles.optionTitle,
-                      { color: displayMode === 'shared' ? colors.text : colors.textSecondary }
-                    ]}>
-                      Partagé
-                    </Text>
-                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
-                      Un écran
-                    </Text>
-                  </LinearGradient>
+                  <View style={[
+                    styles.iconCircle,
+                    { backgroundColor: displayMode === 'shared' ? colors.secondary : 'rgba(16, 185, 129, 0.1)' }
+                  ]}>
+                    <Smartphone 
+                      size={32} 
+                      color={displayMode === 'shared' ? '#fff' : colors.secondary}
+                      strokeWidth={2}
+                    />
+                  </View>
+                  <Text style={[
+                    styles.optionTitle,
+                    { color: colors.text }
+                  ]}>
+                    {t('config.singleScreen')}
+                  </Text>
+                  <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                    {t('config.singleScreenDesc')}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[
                     styles.optionCard,
-                    { borderColor: displayMode === 'distributed' ? colors.secondary : colors.cardBorder }
+                    { 
+                      backgroundColor: displayMode === 'distributed' 
+                        ? (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.08)')
+                        : colors.card,
+                      borderColor: displayMode === 'distributed' ? colors.secondary : colors.cardBorder 
+                    }
                   ]}
                   onPress={() => setDisplayMode('distributed')}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={displayMode === 'distributed' 
-                      ? (isDark ? ['rgba(17, 153, 142, 0.2)', 'rgba(56, 239, 125, 0.2)'] : ['rgba(17, 153, 142, 0.1)', 'rgba(56, 239, 125, 0.1)'])
-                      : [colors.card, colors.card]}
-                    style={styles.optionCardGradient}
-                  >
-                    <View style={[
-                      styles.iconCircle,
-                      { backgroundColor: displayMode === 'distributed' ? colors.secondary : colors.card }
-                    ]}>
-                      <Icon 
-                        name="devices" 
-                        size={32} 
-                        color={displayMode === 'distributed' ? '#fff' : colors.textSecondary} 
-                      />
-                    </View>
-                    <Text style={[
-                      styles.optionTitle,
-                      { color: displayMode === 'distributed' ? colors.text : colors.textSecondary }
-                    ]}>
-                      Distribué
-                    </Text>
-                    <Text style={[styles.optionDescription, { color: colors.textTertiary }]}>
-                      Multi-appareils
-                    </Text>
-                  </LinearGradient>
+                  <View style={[
+                    styles.iconCircle,
+                    { backgroundColor: displayMode === 'distributed' ? colors.secondary : 'rgba(16, 185, 129, 0.1)' }
+                  ]}>
+                    <Wifi
+                      size={32} 
+                      color={displayMode === 'distributed' ? '#fff' : colors.secondary}
+                      strokeWidth={2}
+                    />
+                  </View>
+                  <Text style={[
+                    styles.optionTitle,
+                    { color: colors.text }
+                  ]}>
+                    {t('config.eachScreen')}
+                  </Text>
+                  <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                    {t('config.eachScreenDesc')}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Pseudo */}
+          {/* Mode de jeu */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Votre pseudo</Text>
-              <View style={[styles.inputCard, { borderColor: colors.cardBorder }]}>
-                <LinearGradient
-                  colors={[colors.card, colors.card]}
-                  style={styles.inputGradient}
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Mode de jeu</Text>
+              <View style={styles.optionRow}>
+                {/* Suppression du LinearGradient imbriqué */}
+                <TouchableOpacity
+                  style={[
+                    styles.optionCard, 
+                    { 
+                      backgroundColor: mode === 'sequential' 
+                        ? (isDark ? 'rgba(79, 70, 229, 0.15)' : 'rgba(79, 70, 229, 0.08)')
+                        : colors.card,
+                      borderColor: mode === 'sequential' ? colors.primary : colors.cardBorder 
+                    }
+                  ]}
+                  onPress={() => setMode('sequential')}
+                  activeOpacity={0.8}
                 >
-                  <View style={styles.inputIconWrapper}>
-                    <Icon name="account-outline" size={24} color={colors.textSecondary} />
-                  </View>
-                  <TextInput
-                    style={[styles.input, { color: colors.text }]}
-                    placeholder="Entrez votre nom"
-                    placeholderTextColor={colors.textHint}
-                    value={creatorName}
-                    onChangeText={setCreatorName}
-                    maxLength={20}
-                    autoCapitalize="words"
+                  <View style={[
+                    styles.iconCircle, 
+                    { backgroundColor: mode === 'sequential' ? colors.primary : 'rgba(79, 70, 229, 0.1)' }
+                  ]}>
+                  <CircleFadingArrowUp
+                    size={32} 
+                    color={mode === 'sequential' ? '#fff' : colors.primary}
+                    strokeWidth={2}
                   />
-                </LinearGradient>
+                  </View>
+                  <Text style={[
+                    styles.optionTitle, 
+                    { color: colors.text }
+                  ]}>
+                    {t('config.turnByTurn')}
+                  </Text>
+                  <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                    {t('config.turnByTurnDesc')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.optionCard,
+                    { 
+                      backgroundColor: mode === 'independent' 
+                        ? (isDark ? 'rgba(79, 70, 229, 0.15)' : 'rgba(79, 70, 229, 0.08)')
+                        : colors.card,
+                      borderColor: mode === 'independent' ? colors.primary : colors.cardBorder 
+                    }
+                  ]}
+                  onPress={() => setMode('independent')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.iconCircle,
+                    { backgroundColor: mode === 'independent' ? colors.primary : 'rgba(79, 70, 229, 0.1)' }
+                  ]}>
+                  <CircleArrowUp
+                    size={32} 
+                    color={mode === 'independent' ? '#fff' : colors.primary}
+                    strokeWidth={2}
+                  />
+                  </View>
+                  <Text style={[
+                    styles.optionTitle,
+                    { color: colors.text }
+                  ]}>
+                    {t('config.simultaneous')}
+                  </Text>
+                  <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
+                    {t('config.simultaneousDesc')}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <Text style={[styles.inputHint, { color: colors.textTertiary }]}>
-                Les autres entreront leur pseudo en rejoignant
-              </Text>
             </View>
 
             {/* Nombre de joueurs */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Nombre de joueurs</Text>
-              <View style={[styles.playerSelectorCard, { borderColor: colors.cardBorder }]}>
-                <LinearGradient
-                  colors={[colors.card, colors.card]}
-                  style={styles.playerSelectorGradient}
-                >
-                  <TouchableOpacity
-                    style={[styles.playerButton, numPlayers <= 2 && styles.playerButtonDisabled]}
-                    onPress={decrementPlayers}
-                    disabled={numPlayers <= 2}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={numPlayers <= 2 ? [colors.disabled, colors.disabled] : colors.primaryGradient}
-                      style={styles.playerButtonGradient}
-                    >
-                      <Icon name="minus" size={32} color={numPlayers <= 2 ? colors.disabledText : '#fff'} />
-                    </LinearGradient>
-                  </TouchableOpacity>
-
-                  <View style={styles.playerCountContainer}>
-                    <Text style={[styles.playerCount, { color: colors.text }]}>{numPlayers}</Text>
-                    <Text style={[styles.playerCountLabel, { color: colors.textSecondary }]}>joueurs</Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.playerButton, numPlayers >= 10 && styles.playerButtonDisabled]}
-                    onPress={incrementPlayers}
-                    disabled={numPlayers >= 10}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={numPlayers >= 10 ? [colors.disabled, colors.disabled] : colors.primaryGradient}
-                      style={styles.playerButtonGradient}
-                    >
-                      <Icon name="plus" size={32} color={numPlayers >= 10 ? colors.disabledText : '#fff'} />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </LinearGradient>
-              </View>
-              <Text style={[styles.playerRange, { color: colors.textTertiary }]}>
-                Entre 2 et 10 joueurs
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t('config.playerCount')} : {numPlayers}
               </Text>
-            </View>
-
-            {/* Bouton créer - VRAIMENT CORRIGÉ */}
-            {canCreate ? (
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={createSession}
-                disabled={loading}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={colors.primaryGradient}
-                  style={styles.createButtonGradient}
+              {/* Pas de LinearGradient imbriqué */}
+              <View style={[styles.playerSelectorCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.playerControlButton,
+                    { backgroundColor: numPlayers <= 2 ? colors.disabled : 'rgba(79, 70, 229, 0.1)' }
+                  ]}
+                  onPress={decrementPlayers}
+                  disabled={numPlayers <= 2}
+                  activeOpacity={0.7}
                 >
-                  {loading ? (
-                    <View style={{ alignItems: 'center', gap: 12 }}>
-                      <ActivityIndicator color="#fff" size="large" />
-                      <Text style={[styles.createButtonText, { fontSize: 14, opacity: 0.9 }]}>
-                        {loadingMessage}
-                      </Text>
-                    </View>
-                  ) : (
-                    <>
-                      <Icon name="rocket-launch-outline" size={28} color="#fff" />
-                      <Text style={styles.createButtonText}>Créer la Partie</Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-            ) : (
-              <View style={[styles.createButton, styles.createButtonDisabled]}>
-                <View style={[styles.createButtonDisabledBg, { backgroundColor: colors.disabled }]}>
-                  <Icon name="rocket-launch-outline" size={28} color={colors.disabledText} />
-                  <Text style={[styles.createButtonText, { color: colors.disabledText }]}>
-                    Créer la Partie
-                  </Text>
-                </View>
+                  <Minus size={24} color={colors.text} strokeWidth={2} />
+                </TouchableOpacity>
+
+                <Text style={[styles.playerCount, { color: colors.text }]}>
+                  {numPlayers}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.playerControlButton,
+                    { backgroundColor: numPlayers >= 10 ? colors.disabled : 'rgba(79, 70, 229, 0.1)' }
+                  ]}
+                  onPress={incrementPlayers}
+                  disabled={numPlayers >= 10}
+                  activeOpacity={0.7}
+                >
+                  <Plus size={24} color={colors.text} strokeWidth={2} />
+                </TouchableOpacity>
               </View>
-            )}
-          </ScrollView>
+            </View>
+        </ScrollView>
+
+        {/* Bouton créer - Dégradé sur CTA principal */}
+        <View style={[styles.footer, { backgroundColor: colors.backgroundSolid }]}>
+          <TouchableOpacity
+            style={[styles.createButton, !canCreate && { opacity: 0.5 }]}
+            onPress={createSession}
+            disabled={!canCreate}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={canCreate ? colors.primaryGradient : [colors.disabled, colors.disabled]}
+              style={styles.createButtonGradient}
+            >
+              <Text style={styles.createButtonText}>{t('config.createGame')}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
+
+      {/* LoadingOverlay progressif */}
+      <LoadingOverlay visible={loading} initialMessage={loadingMessage} />
     </LinearGradient>
   );
 };
@@ -420,26 +367,31 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   headerTitle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
     fontSize: 20,
     fontWeight: '700',
+    zIndex: 0,
   },
   themeButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -448,148 +400,106 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   section: {
     marginBottom: 28,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 14,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   optionRow: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
   },
   optionCard: {
     flex: 1,
+    padding: 15,
     borderRadius: 20,
     borderWidth: 2,
-    overflow: 'hidden',
-  },
-  optionCardGradient: {
-    padding: 20,
     alignItems: 'center',
+    gap: 12,
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
   },
   optionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '700',
   },
   optionDescription: {
-    fontSize: 13,
+    fontSize: 11,
+    textAlign: 'center',
   },
   inputCard: {
-    borderRadius: 18,
-    borderWidth: 2,
-    overflow: 'hidden',
-  },
-  inputGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-  },
-  inputIconWrapper: {
-    marginRight: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
   },
   input: {
     flex: 1,
-    paddingVertical: 18,
-    fontSize: 17,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  inputHint: {
-    fontSize: 13,
-    marginTop: 10,
-    paddingHorizontal: 4,
+  helpText: {
+    fontSize: 12,
+    marginTop: 8,
   },
   playerSelectorCard: {
-    borderRadius: 18,
-    borderWidth: 2,
-    overflow: 'hidden',
-  },
-  playerSelectorGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 24,
-    paddingHorizontal: 28,
-  },
-  playerButton: {
+    padding: 20,
     borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
   },
-  playerButtonDisabled: {
-    opacity: 0.5,
-    shadowOpacity: 0,
-  },
-  playerButtonGradient: {
+  playerControlButton: {
     width: 56,
     height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  playerCountContainer: {
-    alignItems: 'center',
-    minWidth: 90,
-  },
   playerCount: {
-    fontSize: 56,
-    fontWeight: '800',
-    lineHeight: 60,
+    fontSize: 48,
+    fontWeight: 'bold',
   },
-  playerCountLabel: {
-    fontSize: 14,
-    marginTop: -6,
-  },
-  playerRange: {
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 10,
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingBottom: 32,
   },
   createButton: {
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
+    elevation: 8,
     shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 15,
-    marginTop: 8,
-  },
-  createButtonDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
   },
   createButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    gap: 14,
-  },
-  createButtonDisabledBg: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    gap: 14,
+    paddingVertical: 18,
+    gap: 12,
   },
   createButtonText: {
+    color: '#fff',
     fontSize: 18,
     fontWeight: '700',
   },

@@ -1,0 +1,63 @@
+{
+  "home": {
+    "title": "Timer Multi-Joueurs",
+    "subtitle": "Gérez le temps de jeu en temps réel",
+    "newGame": "Nouvelle Partie",
+    "newGameDesc": "Créer une session",
+    "join": "Rejoindre",
+    "joinDesc": "Entrer avec un code",
+    "pseudoPlaceholder": "Entrez votre nom"
+  },
+  "config": {
+    "title": "Configuration",
+    "gameMode": "Mode de jeu",
+    "turnByTurn": "Tour par tour",
+    "turnByTurnDesc": "Le timer d'un joueur démarre quand celui du joueur précédent est stoppé",
+    "simultaneous": "Simultané",
+    "simultaneousDesc": "Vous pouvez déclencher plusieurs timers en même temps",
+    "displayMode": "Affichage",
+    "singleScreen": "Un seul écran",
+    "singleScreenDesc": "Tous les timers sont gérés sur le même écran",
+    "eachScreen": "Chacun son écran",
+    "eachScreenDesc": "Chaque joueur gère sont timer avec son appareil",
+    "playerCount": "Nombre de joueurs",
+    "createGame": "Créer la Partie",
+    "creatingGame": "Création de la partie...",
+    "numberPlayers": "Veuillez choisir entre 2 et 10 joueurs.",
+    "selectPseudo": "Veuillez entrer votre pseudo",
+    "player": "Joueur",
+    "noConnection": "Connexion impossible",
+    "errorCreatingGame": "Impossible de créer la partie. Vérifiez votre connexion internet.",
+    "retry": "Réessayer"
+  },
+  "join": {
+    "title": "Rejoindre une partie",
+    "subtitle": "Entrez le code de la partie",
+    "codePlaceHolder": "CODE",
+    "joinButton": "Rejoindre",
+    "choosePlayer": "Choisir un joueur",
+    "selectPlayer": "Sélectionnez quel joueur vous êtes",
+    "confirm": "Confirmer",
+    "verifCode": "Partie non trouvée. Vérifiez le code de la partie.",
+    "error": "Erreur",
+    "validCode": "Veuillez entrer un code valide",
+    "homePseudo": "Veuillez entrer votre pseudo sur la page d'accueil",
+    "awakeServer": "Réveil du serveur en cours (15-20 secondes)…",
+    "lookingGame": "Recherche de la partie…",
+    "anotherPlayer": "Veuillez sélectionner votre joueur",
+    "playerAlreadyConnected": "Ce joueur est déjà connecté. Veuillez en choisir un autre."
+  },
+  "settings": {
+    "title": "Paramètres",
+    "appearance": "Apparence",
+    "theme": "Thème",
+    "darkMode": "Mode sombre",
+    "lightMode": "Mode clair",
+    "contact": "Contact",
+    "about": "À propos",
+    "version": "Version",
+    "language": "Langue",
+    "email": "Email",
+    "website": "Site web"
+  }
+}
