@@ -199,7 +199,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
     const currentPlayer = players[currentPlayerIndex];
     Alert.alert(
       t('distributed.skipPlayer'),
-      `Voulez-vous passer le tour de ${currentPlayer?.name} ?`,
+      t('distributed.confirmSkipPlayer', { player: currentPlayer?.name })
+,
       [
         { text: t('distributed.cancel'), style: 'cancel' },
         {
@@ -237,7 +238,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   };
 
   const handleQuit = () => {
-    Alert.alert(t('distributed.leave'), t('distributedverifOut'), [
+    Alert.alert(t('distributed.leave'), t('distributed.verifOut'), [
       { text: t('distributed.cancel'), style: 'cancel' },
       {
         text: t('distributed.leave'),
@@ -278,7 +279,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   // Partager le code de la partie
   const handleShare = async () => {
     try {
-      const message = `${t('distributed.joiMyGame')}\n\n${t('distributed.code')} ${joinCode}\n\n${t('distributed.codeToJoin')}`;
+      const message = `${t('distributed.joinMyGame')}\n\n${t('distributed.code')} ${joinCode}\n\n${t('distributed.codeToJoin')}`;
       
       const result = await Share.share({
         message: message,
@@ -413,7 +414,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                         </View>
                         <View>
                           <Text style={[styles.lobbyPlayerName, { color: colors.text }]}>
-                            {player.name} {isMe && '(Vous)'}
+                            {player.name} {isMe && t('distributed.you')}
                           </Text>
                           <Text style={[
                             styles.lobbyPlayerStatus,
@@ -584,7 +585,9 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 <PlayerTurnIcon size={18} color={isMyTurn ? '#fff' : colors.text} strokeWidth={2} />
 
                 <Text style={[styles.gameTurnText, { color: isMyTurn ? '#fff' : colors.text }]}>
-                  {isMyTurn ? t('distributed.yourTurn') : `t('distributed.turnOf') ${players[currentPlayerIndex]?.name}`}
+                  {isMyTurn ? t('distributed.yourTurn') : t('distributed.turnOf', { player: players[currentPlayerIndex]?.name })}
+                                  
+
                 </Text>
               </View>
             )}
@@ -638,7 +641,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 <Text style={styles.mainButtonText}>
                   {myPlayer.isRunning
                     ? mode === 'sequential'
-                      ? t('distributed.next')
+                      ? t('distributed.skipToNext')
                       : t('distributed.pause')
                     : t('distributed.start')}
                 </Text>

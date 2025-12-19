@@ -124,28 +124,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
             />
           }
         >
-          {/* Info partie */}
-          <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoItem}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('stats.code')}</Text>
-                <Text style={[styles.infoValue, { color: colors.text }]}>{stats.joinCode}</Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('stats.mode')}</Text>
-                <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {stats.mode === 'sequential' ? t('config.turnByTurn') : t('config.simultaneous')}
-                </Text>
-              </View>
-              <View style={styles.infoItem}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('stats.loadingStats')}</Text>
-                <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {stats.displayMode === 'shared' ? t('config.singleScreen') : t('config.eachScreen')}
-                </Text>
-              </View>
-            </View>
-          </View>
-
+          
           {/* Temps global */}
           <LinearGradient
             colors={colors.primaryGradient}

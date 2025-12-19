@@ -142,12 +142,12 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const handleReset = () => {
     Alert.alert(
-      'Réinitialiser',
-      'Êtes-vous sûr de vouloir réinitialiser tous les timers ?',
+      t('distributed.reset'),
+      t('distributed.resetTimers'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('distributed.cancel'), style: 'cancel' },
         {
-          text: 'Réinitialiser',
+          text: t('distributed.reset'),
           style: 'destructive',
           onPress: () => ApiService.resetSession(sessionId),
         },
@@ -156,10 +156,10 @@ const GameSharedScreen = ({ route, navigation }) => {
   };
 
   const handleQuit = () => {
-    Alert.alert('Quitter', 'Êtes-vous sûr de vouloir quitter la partie ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('distributed.leave'), t('distributed.verifOut'), [
+      { text: t('distributed.cancel'), style: 'cancel' },
       {
-        text: 'Quitter',
+        text: t('distributed.leave'),
         style: 'destructive',
         onPress: () => {
           ApiService.disconnectSocket();
@@ -221,9 +221,9 @@ const GameSharedScreen = ({ route, navigation }) => {
               <Text style={styles.playerButtonText}>
                 {player.isRunning
                   ? mode === 'sequential'
-                    ? 'Suivant'
-                    : 'Pause'
-                  : 'Démarrer'}
+                    ? t('distributed.skipToNext')
+                    : t('distributed.pause')
+                  : t('distributed.start')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -235,17 +235,17 @@ const GameSharedScreen = ({ route, navigation }) => {
   return (
     <LinearGradient colors={colors.background} style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* ✅ NOUVEAU : Afficher loading tant que pas de données */}
+        {/* Afficher loading tant que pas de données */}
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <Hourglass size={64} color={colors.primary} strokeWidth={2} />
             <Text style={[styles.loadingText, { color: colors.text }]}>
-              Chargement de la partie...
+              {t('distributed.loading')}
             </Text>
           </View>
         ) : (
           <>
-            {/* ✅ NOUVEAU : Header FIXE (non scrollable) */}
+            {/* Header FIXE (non scrollable) */}
             <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
           <View style={styles.headerTop}>
             <View style={styles.connectionStatus}>
@@ -254,7 +254,7 @@ const GameSharedScreen = ({ route, navigation }) => {
                 { backgroundColor: isConnected ? colors.success : colors.danger }
               ]} />
               <Text style={[styles.codeText, { color: colors.textSecondary }]}>
-                Code: {joinCode}
+                 {t('distributed.code')} {joinCode}
               </Text>
             </View>
 
@@ -292,7 +292,7 @@ const GameSharedScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Temps global - ✅ GARDÉ : Dégradé sur élément principal */}
+          {/* Temps global - Dégradé sur élément principal */}
           <LinearGradient
             colors={colors.primaryGradient}
             style={styles.globalTimeCard}
@@ -305,7 +305,7 @@ const GameSharedScreen = ({ route, navigation }) => {
             <View style={[styles.turnBadge, { backgroundColor: colors.card }]}>
               <Timer size={20} color={colors.text}  strokeWidth={2} />
               <Text style={[styles.turnText, { color: colors.text }]}>
-                Tour de {players[currentPlayerIndex]?.name}
+                {t('distributed.turnOf', { player: players[currentPlayerIndex]?.name })}
               </Text>
             </View>
           )}

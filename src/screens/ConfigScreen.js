@@ -82,7 +82,7 @@ const ConfigScreen = ({ navigation }) => {
     try {
       const playerNames = [creatorName.trim()];
       for (let i = 1; i < numPlayers; i++) {
-        playerNames.push(t('config.player')` ${i + 1}`);
+        playerNames.push(t('config.player') + ' ' + (i + 1));
       }
       
       const data = await ApiService.createSession(
@@ -432,6 +432,8 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: '700',
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
   optionDescription: {
     fontSize: 11,

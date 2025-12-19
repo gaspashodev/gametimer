@@ -3,10 +3,18 @@ import { I18n } from 'i18n-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import fr from '../locales/fr.json';
 import en from '../locales/en.json';
+import es from '../locales/es.json';
+import de from '../locales/de.json';
+import it from '../locales/it.json';
+import pt from '../locales/pt.json'; 
 
 const i18n = new I18n({
   fr,
   en,
+  es,
+  de,
+  it,
+  pt,
 });
 
 i18n.enableFallback = true;

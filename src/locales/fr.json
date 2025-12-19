@@ -89,13 +89,13 @@
     "leave": "Quitter",
     "startGame": "Démarrer la partie",
     "startWhatever": "Démarrer quand même",
-    "code": "Code : ",
+    "code": "Code :",
     "yourTurn": "C'est à vous de jouer !",
-    "turnOf": "Tour de : ",
+    "turnOf": "Tour de {{player}}",
     "waitingForYourTurn": "Attendez votre tour",
     "yourTime": "Votre chrono",
     "pause": "Pause",
-    "next": "Passer au suivant",
+    "skipToNext": "Passer au suivant",
     "start": "Démarrer",
     "others": "Autres joueurs",
     "live": "En cours",
@@ -115,6 +115,8 @@
     "skipAdmin": "Seul l'hôte peut passer le tour d'un joueur !",
     "skipTurnByTurn": "Il n'y a que dans le mode Tour par tour que l'on peut passer le tour d'un joueur !",
     "joinMyGame": "Rejoignez ma partie !",
-    "codeToJoin": "Entrez ce code dans l'app Timer Multi-Joueurs pour nous rejoindre !"
+    "codeToJoin": "Entrez ce code dans l'app Timer Multi-Joueurs pour nous rejoindre !",
+    "you": "(Vous)",
+    "confirmSkipPlayer": "Voulez-vous passer le tour de {{player}} ?"
   }
 }

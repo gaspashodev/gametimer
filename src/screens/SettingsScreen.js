@@ -87,6 +87,7 @@ const { t, locale, changeLanguage } = useLanguage();
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('settings.language')}</Text>
             
+            {/* French */}
             <TouchableOpacity
               style={[
                 styles.languageCard,
@@ -120,6 +121,7 @@ const { t, locale, changeLanguage } = useLanguage();
               )}
             </TouchableOpacity>
 
+            {/* English */}
             <TouchableOpacity
               style={[
                 styles.languageCard,
@@ -151,6 +153,110 @@ const { t, locale, changeLanguage } = useLanguage();
               {locale === 'en' && (
                 <Check size={24} color="#fff" strokeWidth={2} />
               )}
+            </TouchableOpacity>
+
+            {/* Español */}
+            <TouchableOpacity
+              style={[
+                styles.languageCard,
+                { 
+                  backgroundColor: locale === 'es' ? colors.primary : colors.card,
+                  borderColor: locale === 'es' ? colors.primary : colors.cardBorder,
+                }
+              ]}
+              onPress={() => changeLanguage('es')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.languageLeft}>
+                <Text style={styles.languageFlag}>🇪🇸</Text>
+                <View>
+                  <Text style={[styles.languageTitle, { color: locale === 'es' ? '#fff' : colors.text }]}>
+                    Español
+                  </Text>
+                  <Text style={[styles.languageSubtitle, { color: locale === 'es' ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]}>
+                    Spanish
+                  </Text>
+                </View>
+              </View>
+              {locale === 'es' && <Check size={24} color="#fff" strokeWidth={2} />}
+            </TouchableOpacity>
+
+            {/* Deutsch */}
+            <TouchableOpacity
+              style={[
+                styles.languageCard,
+                { 
+                  backgroundColor: locale === 'de' ? colors.primary : colors.card,
+                  borderColor: locale === 'de' ? colors.primary : colors.cardBorder,
+                }
+              ]}
+              onPress={() => changeLanguage('de')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.languageLeft}>
+                <Text style={styles.languageFlag}>🇩🇪</Text>
+                <View>
+                  <Text style={[styles.languageTitle, { color: locale === 'de' ? '#fff' : colors.text }]}>
+                    Deutsch
+                  </Text>
+                  <Text style={[styles.languageSubtitle, { color: locale === 'de' ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]}>
+                    German
+                  </Text>
+                </View>
+              </View>
+              {locale === 'de' && <Check size={24} color="#fff" strokeWidth={2} />}
+            </TouchableOpacity>
+
+            {/* Italiano */}
+            <TouchableOpacity
+              style={[
+                styles.languageCard,
+                { 
+                  backgroundColor: locale === 'it' ? colors.primary : colors.card,
+                  borderColor: locale === 'it' ? colors.primary : colors.cardBorder,
+                }
+              ]}
+              onPress={() => changeLanguage('it')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.languageLeft}>
+                <Text style={styles.languageFlag}>🇮🇹</Text>
+                <View>
+                  <Text style={[styles.languageTitle, { color: locale === 'it' ? '#fff' : colors.text }]}>
+                    Italiano
+                  </Text>
+                  <Text style={[styles.languageSubtitle, { color: locale === 'it' ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]}>
+                    Italian
+                  </Text>
+                </View>
+              </View>
+              {locale === 'it' && <Check size={24} color="#fff" strokeWidth={2} />}
+            </TouchableOpacity>
+
+            {/* Português */}
+            <TouchableOpacity
+              style={[
+                styles.languageCard,
+                { 
+                  backgroundColor: locale === 'pt' ? colors.primary : colors.card,
+                  borderColor: locale === 'pt' ? colors.primary : colors.cardBorder,
+                }
+              ]}
+              onPress={() => changeLanguage('pt')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.languageLeft}>
+                <Text style={styles.languageFlag}>🇵🇹</Text>
+                <View>
+                  <Text style={[styles.languageTitle, { color: locale === 'pt' ? '#fff' : colors.text }]}>
+                    Português
+                  </Text>
+                  <Text style={[styles.languageSubtitle, { color: locale === 'pt' ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]}>
+                    Portuguese
+                  </Text>
+                </View>
+              </View>
+              {locale === 'pt' && <Check size={24} color="#fff" strokeWidth={2} />}
             </TouchableOpacity>
           </View>
 
