@@ -42,7 +42,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
     } catch (error) {
       setLoading(false);
       setRefreshing(false);
-      Alert.alert('Erreur', 'Impossible de charger les statistiques');
+      Alert.alert(t('join.error'), t('stats.errorStats'));
     }
   };
 
@@ -62,7 +62,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              Chargement des statistiques...
+              {t('stats.loadingStats')}
             </Text>
           </View>
         </SafeAreaView>
@@ -77,7 +77,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
           <View style={styles.errorContainer}>
            <CircleAlert size={60} color={colors.danger} strokeWidth={2} />
             <Text style={[styles.errorText, { color: colors.text }]}>
-              Impossible de charger les stats
+              {t('stats.errorStats')}
             </Text>
             <TouchableOpacity
               style={styles.retryButton}
@@ -88,7 +88,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
                 colors={colors.primaryGradient}
                 style={styles.retryButtonGradient}
               >
-                <Text style={styles.retryButtonText}>Réessayer</Text>
+                <Text style={styles.retryButtonText}>{t('config.retry')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -109,7 +109,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
           >
             <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Statistiques</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('stats.title')}</Text>
         </View>
 
         <ScrollView
@@ -128,19 +128,19 @@ const PartyStatsScreen = ({ route, navigation }) => {
           <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
             <View style={styles.infoRow}>
               <View style={styles.infoItem}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Code</Text>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('stats.code')}</Text>
                 <Text style={[styles.infoValue, { color: colors.text }]}>{stats.joinCode}</Text>
               </View>
               <View style={styles.infoItem}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Mode</Text>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('stats.mode')}</Text>
                 <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {stats.mode === 'sequential' ? 'Séquentiel' : 'Indépendant'}
+                  {stats.mode === 'sequential' ? t('config.turnByTurn') : t('config.simultaneous')}
                 </Text>
               </View>
               <View style={styles.infoItem}>
-                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Affichage</Text>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('stats.loadingStats')}</Text>
                 <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {stats.displayMode === 'shared' ? 'Partagé' : 'Distribué'}
+                  {stats.displayMode === 'shared' ? t('config.singleScreen') : t('config.eachScreen')}
                 </Text>
               </View>
             </View>
@@ -152,10 +152,10 @@ const PartyStatsScreen = ({ route, navigation }) => {
             style={styles.globalTimeCard}
           >                
           <Timer size={32} color="#fff" strokeWidth={2} />
-            <Text style={styles.globalTimeLabel}>Temps Total</Text>
+            <Text style={styles.globalTimeLabel}>{t('stats.totalTime')}</Text>
             <Text style={styles.globalTime}>{stats.globalTimeFormatted}</Text>
             <View style={styles.averageContainer}>
-              <Text style={styles.averageLabel}>Moyenne</Text>
+              <Text style={styles.averageLabel}>{t('stats.averageTime')}</Text>
               <Text style={styles.averageTime}>{stats.averageTimeFormatted}</Text>
             </View>
           </LinearGradient>
@@ -166,17 +166,17 @@ const PartyStatsScreen = ({ route, navigation }) => {
               <View style={styles.counterItem}>
                 <Users size={32} color={colors.primary} strokeWidth={2} />
                 <Text style={[styles.counterValue, { color: colors.text }]}>{stats.totalPlayers}</Text>
-                <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>Joueurs</Text>
+                <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>{t('stats.players')}</Text>
               </View>
               <View style={styles.counterItem}>
                 <Wifi size={32} color={colors.success} strokeWidth={2} />
                 <Text style={[styles.counterValue, { color: colors.text }]}>{stats.connectedPlayers}</Text>
-                <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>Connectés</Text>
+                <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>{t('stats.connected')}</Text>
               </View>
               <View style={styles.counterItem}>
                 <Play size={32} color={colors.warning} strokeWidth={2} />
                 <Text style={[styles.counterValue, { color: colors.text }]}>{stats.activePlayers}</Text>
-                <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>Actifs</Text>
+                <Text style={[styles.counterLabel, { color: colors.textSecondary }]}>{t('stats.active')}</Text>
               </View>
             </View>
           </View>
@@ -185,7 +185,7 @@ const PartyStatsScreen = ({ route, navigation }) => {
           <View style={[styles.rankingCard, { backgroundColor: colors.card }]}>
             <View style={styles.rankingHeader}>
               <Trophy size={24} color={colors.warning} strokeWidth={2} />
-              <Text style={[styles.rankingTitle, { color: colors.text }]}>Classement</Text>
+              <Text style={[styles.rankingTitle, { color: colors.text }]}>{t('stats.ranking')}</Text>
             </View>
 
             {stats.ranking.map((player, index) => (

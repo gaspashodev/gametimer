@@ -59,5 +59,17 @@
     "language": "Language",
     "email": "Email",
     "website": "Website"
-  }
+  },
+  "stats": {
+  "loadingStats": "Loading stats...",
+  "errorStats": "Unable to load stats",
+  "code": "Code",
+  "mode": "Mode",
+  "totalTime": "Total time",
+  "averageTime": "Average",
+  "players": "Players",
+  "connected": "Connected",
+  "active": "Active",
+  "ranking": "Ranking"
+}
 }

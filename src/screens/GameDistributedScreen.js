@@ -168,12 +168,12 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
   const toggleMyPlayer = () => {
     if (sessionStatus !== 'started') {
-      Alert.alert('Attention', 'La partie n\'a pas encore commencé !');
+      Alert.alert(t('join.error'), t('distributed.notStarted'));
       return;
     }
     
     if (mode === 'sequential' && !isMyTurn) {
-      Alert.alert('Attention', "Ce n'est pas votre tour !");
+      Alert.alert(t('distributed.caution'), t('distributed.notYourTurn'));
       return;
     }
     
@@ -187,23 +187,23 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
   const handleSkipPlayer = () => {
     if (!isCreator) {
-      Alert.alert('Erreur', 'Seul le créateur peut skip un joueur !');
+      Alert.alert(t('join.error'), t('distributed.skipAdmin'));
       return;
     }
     
     if (mode !== 'sequential') {
-      Alert.alert('Erreur', 'Le skip n\'est disponible qu\'en mode séquentiel !');
+      Alert.alert(t('join.error'), t('distributed.skipTurnByTurn'));
       return;
     }
     
     const currentPlayer = players[currentPlayerIndex];
     Alert.alert(
-      'Skip Joueur',
+      t('distributed.skipPlayer'),
       `Voulez-vous passer le tour de ${currentPlayer?.name} ?`,
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('distributed.cancel'), style: 'cancel' },
         {
-          text: 'Skip',
+          text: t('distributed.skip'),
           style: 'destructive',
           onPress: () => ApiService.skipPlayer(sessionId, myPlayerId),
         },
@@ -213,7 +213,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
   const handlePauseAll = () => {
     if (!isCreator) {
-      Alert.alert('Erreur', 'Seul le créateur peut mettre en pause globale !');
+      Alert.alert(t('join.error'), t('distributed.globalPause'));
       return;
     }
     
@@ -222,14 +222,14 @@ const GameDistributedScreen = ({ route, navigation }) => {
 
   const handleReset = () => {
     if (!isCreator) {
-      Alert.alert('Erreur', 'Seul le créateur peut réinitialiser la partie !');
+      Alert.alert(t('join.error'), t('distributed.resetAdmin'));
       return;
     }
     
-    Alert.alert('Réinitialiser', 'Voulez-vous vraiment réinitialiser tous les timers ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('distributed.reset'), t('distributed.resetTimers'), [
+      { text: t('distributed.cancel'), style: 'cancel' },
       {
-        text: 'Réinitialiser',
+        text: t('distributed.reset'),
         style: 'destructive',
         onPress: () => ApiService.resetSession(sessionId),
       },
@@ -237,10 +237,10 @@ const GameDistributedScreen = ({ route, navigation }) => {
   };
 
   const handleQuit = () => {
-    Alert.alert('Quitter', 'Êtes-vous sûr de vouloir quitter la partie ?', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('distributed.leave'), t('distributedverifOut'), [
+      { text: t('distributed.cancel'), style: 'cancel' },
       {
-        text: 'Quitter',
+        text: t('distributed.leave'),
         style: 'destructive',
         onPress: () => {
           ApiService.disconnectSocket();
@@ -278,25 +278,16 @@ const GameDistributedScreen = ({ route, navigation }) => {
   // Partager le code de la partie
   const handleShare = async () => {
     try {
-      const message = `🎮 Rejoignez ma partie !\n\nCode : ${joinCode}\n\nEntrez ce code dans l'app Timer Multi-Joueurs pour nous rejoindre !`;
+      const message = `${t('distributed.joiMyGame')}\n\n${t('distributed.code')} ${joinCode}\n\n${t('distributed.codeToJoin')}`;
       
       const result = await Share.share({
         message: message,
-        title: 'Code de partie - Timer Multi-Joueurs',
+        title: t('distributed.title'),
       });
 
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          console.log('Partagé via:', result.activityType);
-        } else {
-          console.log('Partagé avec succès');
-        }
-      } else if (result.action === Share.dismissedAction) {
-        console.log('Partage annulé');
-      }
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de partager le code');
-      console.error('Erreur partage:', error);
+      Alert.alert(t('join.error'), t('distributed.noShareCode'));
+      console.error(t('distributed.shareError'), error);
     }
   };
 
@@ -307,7 +298,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              Chargement...
+              {t('distributed.loading')}
             </Text>
           </View>
         </SafeAreaView>
@@ -327,12 +318,12 @@ const GameDistributedScreen = ({ route, navigation }) => {
             <View style={[styles.lobbyHeader, { backgroundColor: colors.card }]}>
               
               <Text style={[styles.lobbyTitle, { color: colors.text }]}>
-                Salle d'Attente
+                {t('distributed.lobby')}
               </Text>
               
               <View style={[styles.codeBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(102,126,234,0.1)' }]}>
                 <Text style={[styles.codeLabel, { color: colors.textSecondary }]}>
-                  Code de la partie
+                  {t('distributed.roomCode')}
                 </Text>
                 <Text style={[styles.codeValue, { color: colors.primary }]}>
                   {joinCode}
@@ -344,7 +335,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 >
                   <Share2 size={18} color={colors.primary}  strokeWidth={2} />
                   <Text style={[styles.shareButtonText, { color: colors.primary }]}>
-                    Partager le code
+                    {t('distributed.shareCode')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -360,7 +351,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                   styles.connectionText,
                   { color: isConnected ? colors.success : colors.danger }
                 ]}>
-                  {isConnected ? 'Connecté' : 'Déconnecté'}
+                  {isConnected ? t('distributed.connected') : t('distributed.disconnected')}
                 </Text>
               </View>
             </View>
@@ -369,7 +360,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
             <View style={[styles.playersStatusCard, { backgroundColor: colors.card }]}>
               <View style={styles.playersStatusHeader}>
                 <Text style={[styles.playersStatusTitle, { color: colors.text }]}>
-                  Joueurs connectés
+                  {t('distributed.connectPlayers')}
                 </Text>
                 <View style={[styles.counterBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(102,126,234,0.1)' }]}>
                   <Text style={[styles.counterText, { color: colors.primary }]}>
@@ -428,7 +419,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                             styles.lobbyPlayerStatus,
                             { color: isPlayerConnected ? colors.success : colors.textTertiary }
                           ]}>
-                            {isPlayerConnected ? 'Prêt' : 'En attente...'}
+                            {isPlayerConnected ? t('distributed.ready') : t('distributed.waiting')}
                           </Text>
                         </View>
                       </View>
@@ -471,7 +462,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
               <View style={[styles.readyBanner, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
               <Check size={24} color={colors.success}  strokeWidth={2} />
                 <Text style={[styles.readyText, { color: colors.success }]}>
-                  Tous les joueurs sont prêts !
+                  {t('distributed.allReady')}
                 </Text>
               </View>
             )}
@@ -488,14 +479,14 @@ const GameDistributedScreen = ({ route, navigation }) => {
                   style={styles.startButtonGradient}
                 >
                   <Text style={styles.startButtonText}>
-                    {allConnected ? 'Démarrer la Partie' : 'Démarrer Quand Même'}
+                    {allConnected ? t('distributed.startGame') : t('distributed.startWhatever')}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
             ) : (
               <View style={[styles.waitingMessage, { backgroundColor: colors.card }]}>
                 <Text style={[styles.waitingText, { color: colors.textSecondary }]}>
-                  En attente du lancement par {players[0]?.name}...
+                  {t('distributed.waitingFor')} {players[0]?.name}...
                 </Text>
               </View>
             )}
@@ -506,7 +497,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
               activeOpacity={0.7}
             >
               <Text style={[styles.lobbyBackButtonText, { color: colors.textSecondary }]}>
-                Quitter
+                {t('distributed.leave')}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -530,7 +521,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                   { backgroundColor: isConnected ? colors.success : colors.danger }
                 ]} />
                 <Text style={[styles.codeText, { color: colors.textSecondary }]}>
-                  Code: {joinCode}
+                  {t('distributed.code')} {joinCode}
                 </Text>
               </View>
 
@@ -584,7 +575,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
               colors={colors.primaryGradient}
               style={styles.gameGlobalTime}
             >
-              <Text style={styles.gameGlobalLabel}>Temps Total</Text>
+              <Text style={styles.gameGlobalLabel}>{t('stats.totalTime')}</Text>
               <Text style={styles.gameGlobalValue}>{formatTime(globalTime)}</Text>
             </LinearGradient>
 
@@ -593,7 +584,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 <PlayerTurnIcon size={18} color={isMyTurn ? '#fff' : colors.text} strokeWidth={2} />
 
                 <Text style={[styles.gameTurnText, { color: isMyTurn ? '#fff' : colors.text }]}>
-                  {isMyTurn ? "C'est votre tour !" : `Tour de ${players[currentPlayerIndex]?.name}`}
+                  {isMyTurn ? t('distributed.yourTurn') : `t('distributed.turnOf') ${players[currentPlayerIndex]?.name}`}
                 </Text>
               </View>
             )}
@@ -618,7 +609,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
             ]}
           >
             <Text style={[styles.myPlayerLabel, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.textSecondary }]}>
-              Votre chrono
+              {t('distributed.yourTime')}
             </Text>
             <Text style={[styles.myPlayerName, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.text }]}>
               {myPlayer.name}
@@ -647,16 +638,16 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 <Text style={styles.mainButtonText}>
                   {myPlayer.isRunning
                     ? mode === 'sequential'
-                      ? 'Passer au Suivant'
-                      : 'Pause'
-                    : 'Démarrer'}
+                      ? t('distributed.next')
+                      : t('distributed.pause')
+                    : t('distributed.start')}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
 
             {mode === 'sequential' && !isMyTurn && (
               <Text style={[styles.waitText, { color: colors.textSecondary }]}>
-                Attendez votre tour
+                {t('distributed.waitingForYourTurn')}
               </Text>
             )}
           </View>
@@ -664,7 +655,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
           {/* Autres joueurs */}
           <View style={[styles.otherPlayersSection, { backgroundColor: colors.card }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Autres joueurs
+              {t('distributed.others')}
             </Text>
             {players
               .filter((p) => p.id !== myPlayerId)
@@ -680,7 +671,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
                       <View style={styles.runningBadge}>
                         <View style={[styles.runningDot, { backgroundColor: colors.success }]} />
                         <Text style={[styles.runningText, { color: colors.success }]}>
-                          En cours
+                          {t('distributed.live')}
                         </Text>
                       </View>
                     )}
