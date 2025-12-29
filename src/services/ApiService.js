@@ -20,14 +20,15 @@ class ApiService {
   // ===== GESTION DES SESSIONS =====
 
   // Créer une nouvelle session
-  async createSession(mode, numPlayers, displayMode, playerNames) {
+  async createSession(mode, numPlayers, displayMode, playerNames, timeLimit) {
     try {
       console.log('📡 Création session vers:', `${API_URL}/api/sessions`);
       const response = await axios.post(`${API_URL}/api/sessions`, {
         mode,
         numPlayers,
         displayMode,
-        playerNames
+        playerNames,
+        timeLimit
       }, {
         timeout: 30000 // 30 secondes
       });

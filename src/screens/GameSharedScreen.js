@@ -24,6 +24,26 @@ import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
 import { useLanguage } from '../contexts/LanguageContext';
 
+const getPlayerColor = (player, session, colors) => {
+  if (player.isEliminated) {
+    return '#991B1B'; // Rouge foncé (éliminé)
+  }
+  
+  if (!session.timeLimit) return colors.secondary;
+  
+  const percentage = (player.time / session.timeLimit) * 100;
+  
+  if (percentage <= 10) {
+    return '#DC2626'; // Rouge (< 10%)
+  } else if (percentage <= 25) {
+    return '#F59E0B'; // Orange (< 25%)
+  } else if (player.isRunning) {
+    return colors.secondary; // Vert (normal actif)
+  } else {
+    return colors.primary; // Violet (normal inactif)
+  }
+};
+
 const GameSharedScreen = ({ route, navigation }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const { sessionId, joinCode, mode } = route.params;
@@ -32,6 +52,7 @@ const GameSharedScreen = ({ route, navigation }) => {
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [session, setSession] = useState(null); // ✅ AJOUTÉ : Stocker la session
   const { t } = useLanguage();
 
   const playerIntervalsRef = useRef({});
@@ -51,6 +72,7 @@ const GameSharedScreen = ({ route, navigation }) => {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
+        setSession(session); // ✅ AJOUTÉ : Stocker la session
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
@@ -67,10 +89,22 @@ const GameSharedScreen = ({ route, navigation }) => {
         setPlayers(updatedPlayers);
         setCurrentPlayerIndex(session.currentPlayerIndex);
         
-        // ✅ NOUVEAU : Marquer comme chargé dès qu'on a les données
+        // Marquer comme chargé dès qu'on a les données
         if (isLoading && updatedPlayers.length > 0) {
           setIsLoading(false);
         }
+
+        // ✅ Check si tous éliminés
+          if (session.status === 'finished') {
+            Alert.alert(
+              t('distributed.allEliminated'),
+              t('distributed.viewStats'),
+              [{
+                text: 'OK',
+                onPress: () => navigation.replace('PartyStats', { sessionId })
+              }]
+            );
+          }
       },
     };
 
@@ -97,7 +131,7 @@ const GameSharedScreen = ({ route, navigation }) => {
         playerIntervalsRef.current[player.id] = setInterval(() => {
           setPlayers((prev) => {
             const newPlayers = prev.map((p) =>
-              p.id === player.id ? { ...p, time: p.time + 1 } : p
+              p.id === player.id ? { ...p, time: Math.max(0, p.time - 1) } : p
             );
 
             const updatedPlayer = newPlayers.find((p) => p.id === player.id);
@@ -122,6 +156,15 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const togglePlayer = (playerId) => {
     const player = players.find(p => p.id === playerId);
+    
+    // ✅ AJOUTÉ : Vérifier si le joueur est éliminé
+    if (player?.isEliminated) {
+      Alert.alert(
+        t('distributed.eliminated'),
+        t('distributed.timeUp')
+      );
+      return;
+    }
     if (player && player.isRunning) {
       ApiService.updateTime(sessionId, playerId, player.time);
     }
@@ -173,24 +216,17 @@ const GameSharedScreen = ({ route, navigation }) => {
     const isCurrentTurn = mode === 'sequential' && index === currentPlayerIndex;
     const canInteract = mode === 'independent' || isCurrentTurn;
     const ActionIcon = player.isRunning ? Pause : Play;
+    const isEliminated = player.isEliminated;
+    const playerColor = getPlayerColor(player, { timeLimit: session?.timeLimit }, colors);
 
     return (
       <View style={styles.playerCardWrapper}>
         <View
           style={[
             styles.playerCard,
-            {
-              backgroundColor: player.isRunning
-                ? colors.secondary
-                : isCurrentTurn && !player.isRunning
-                  ? colors.warning
-                  : colors.card,
-              borderColor: player.isRunning
-                ? colors.secondary
-                : isCurrentTurn && !player.isRunning
-                  ? colors.warning
-                  : colors.cardBorder,
-            },
+            player.isRunning && styles.playerCardActive,
+            isCurrentTurn && !player.isRunning && styles.playerCardTurn,
+            isEliminated && styles.playerCardEliminated, // ✅ NOUVEAU
           ]}
         >
           <Text style={[styles.playerName, { color: player.isRunning || isCurrentTurn ? '#fff' : colors.text }]}>
@@ -201,9 +237,13 @@ const GameSharedScreen = ({ route, navigation }) => {
           </Text>
           
           <TouchableOpacity
-            style={styles.playerButton}
+            style={[
+                styles.playerButton,
+                { backgroundColor: playerColor },
+                isEliminated && styles.playerButtonDisabled,
+              ]}
             onPress={() => togglePlayer(player.id)}
-            disabled={!canInteract}
+            disabled={!canInteract || isEliminated}
             activeOpacity={0.8}
           >
             <LinearGradient
@@ -219,11 +259,11 @@ const GameSharedScreen = ({ route, navigation }) => {
               <ActionIcon size={20} color="#fff" strokeWidth={2} />
 
               <Text style={styles.playerButtonText}>
-                {player.isRunning
+                {isEliminated ? t('distributed.eliminated') : (player.isRunning
                   ? mode === 'sequential'
                     ? t('distributed.skipToNext')
                     : t('distributed.pause')
-                  : t('distributed.start')}
+                  : t('distributed.start'))}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -469,6 +509,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  playerCardEliminated: {
+    backgroundColor: 'rgba(153, 27, 27, 0.2)',
+    borderColor: '#DC2626',
+    opacity: 0.7,
+  },
+  playerButtonDisabled: {
+    opacity: 0.5,
   },
 });
 

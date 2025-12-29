@@ -56,25 +56,31 @@ app.get('/', (req, res) => {
 
 // Créer une nouvelle session de jeu
 app.post('/api/sessions', (req, res) => {
-  const { mode, numPlayers, displayMode, playerNames } = req.body;
+  const { mode, numPlayers, displayMode, playerNames, timeLimit } = req.body;
   
+  // ✅ Validation : timeLimit obligatoire
+  if (!timeLimit || timeLimit <= 0) {
+    return res.status(400).json({ error: 'timeLimit is required and must be > 0' });
+  }  
   const sessionId = uuidv4();
   const players = Array.from({ length: numPlayers }, (_, i) => ({
     id: i,
     name: playerNames?.[i] || `Joueur ${i + 1}`,
-    time: 0,
+    time: timeLimit, // ✅ Démarrer avec le temps limite
     isRunning: false,
+    isEliminated: false, // ✅ NOUVEAU
   }));
 
   const session = {
     id: sessionId,
     mode, // 'sequential' or 'independent'
     displayMode, // 'shared' or 'distributed'
+    timeLimit, // ✅ NOUVEAU : Temps limite en secondes
     players,
     currentPlayerIndex: 0,
-    globalTime: 0,
-    status: displayMode === 'distributed' ? 'lobby' : 'started', // 'lobby' ou 'started'
-    connectedPlayers: [], // Liste des IDs de joueurs connectés
+    globalTime: timeLimit * numPlayers, // ✅ Somme des temps initiaux
+    status: displayMode === 'distributed' ? 'lobby' : 'started',
+    connectedPlayers: [],
     createdAt: new Date(),
     lastUpdate: new Date(),
   };
@@ -113,7 +119,7 @@ app.get('/api/sessions/join/:joinCode', (req, res) => {
   res.status(404).json({ error: 'Session non trouvée' });
 });
 
-// ✅ NOUVEAU : API pour streamers - Format simplifié
+//  API
 app.get('/api/stream/:sessionId', (req, res) => {
   const { sessionId } = req.params;
   const session = gameSessions.get(sessionId);
@@ -132,8 +138,9 @@ app.get('/api/stream/:sessionId', (req, res) => {
       time: p.time,
       timeFormatted: formatTime(p.time),
       isActive: p.isRunning,
-      percentageOfTotal: session.globalTime > 0 
-        ? Math.round((p.time / session.globalTime) * 100) 
+      isEliminated: p.isEliminated,
+      percentageRemaining: session.timeLimit > 0
+        ? Math.round((p.time / session.timeLimit) * 100)
         : 0
     })),
     currentPlayer: session.mode === 'sequential' 
@@ -144,7 +151,7 @@ app.get('/api/stream/:sessionId', (req, res) => {
   res.json(streamData);
 });
 
-// ✅ NOUVEAU : Stats complètes d'une partie
+//  Stats complètes d'une partie
 app.get('/api/party/:sessionId/stats', (req, res) => {
   const { sessionId } = req.params;
   const session = gameSessions.get(sessionId);
@@ -153,14 +160,12 @@ app.get('/api/party/:sessionId/stats', (req, res) => {
     return res.status(404).json({ error: 'Session non trouvée' });
   }
 
-  // Calcul des stats avancées
   const totalTime = session.globalTime;
   const activePlayers = session.players.filter(p => p.time > 0);
   const averageTime = activePlayers.length > 0 
     ? Math.round(totalTime / activePlayers.length) 
     : 0;
   
-  // Tri des joueurs par temps décroissant
   const sortedPlayers = [...session.players].sort((a, b) => b.time - a.time);
 
   const stats = {
@@ -169,22 +174,22 @@ app.get('/api/party/:sessionId/stats', (req, res) => {
     mode: session.mode,
     displayMode: session.displayMode,
     status: session.status,
+    timeLimit: session.timeLimit,
+    timeLimitFormatted: formatTime(session.timeLimit),
     
-    // Temps
     globalTime: session.globalTime,
     globalTimeFormatted: formatTime(session.globalTime),
     averageTime: averageTime,
     averageTimeFormatted: formatTime(averageTime),
     
-    // Dates
     createdAt: session.createdAt,
     lastUpdate: session.lastUpdate,
-    duration: Math.floor((new Date() - session.createdAt) / 1000), // Durée totale de la session en secondes
+    duration: Math.floor((new Date() - session.createdAt) / 1000),
     
-    // Joueurs
     totalPlayers: session.players.length,
     connectedPlayers: session.connectedPlayers.length,
     activePlayers: session.players.filter(p => p.isRunning).length,
+    eliminatedPlayers: session.players.filter(p => p.isEliminated).length, // ✅ NOUVEAU
     
     players: session.players.map(p => ({
       id: p.id,
@@ -192,21 +197,22 @@ app.get('/api/party/:sessionId/stats', (req, res) => {
       time: p.time,
       timeFormatted: formatTime(p.time),
       isRunning: p.isRunning,
+      isEliminated: p.isEliminated, // ✅ NOUVEAU
       isConnected: session.connectedPlayers.includes(p.id),
-      percentageOfTotal: totalTime > 0 
-        ? Math.round((p.time / totalTime) * 100) 
+      percentageRemaining: session.timeLimit > 0
+        ? Math.round((p.time / session.timeLimit) * 100)
         : 0,
       rank: sortedPlayers.findIndex(sp => sp.id === p.id) + 1
     })),
     
-    // Classement
     ranking: sortedPlayers.map((p, index) => ({
       rank: index + 1,
       name: p.name,
       time: p.time,
       timeFormatted: formatTime(p.time),
-      percentageOfTotal: totalTime > 0 
-        ? Math.round((p.time / totalTime) * 100) 
+      isEliminated: p.isEliminated,
+      percentageRemaining: session.timeLimit > 0
+        ? Math.round((p.time / session.timeLimit) * 100)
         : 0
     })),
     
@@ -217,7 +223,7 @@ app.get('/api/party/:sessionId/stats', (req, res) => {
   res.json(stats);
 });
 
-// ✅ NOUVEAU : Temps d'un joueur spécifique
+//  Temps d'un joueur spécifique
 app.get('/api/party/:sessionId/player/:playerId', (req, res) => {
   const { sessionId, playerId } = req.params;
   const session = gameSessions.get(sessionId);
@@ -242,9 +248,10 @@ app.get('/api/party/:sessionId/player/:playerId', (req, res) => {
     time: player.time,
     timeFormatted: formatTime(player.time),
     isRunning: player.isRunning,
+    isEliminated: player.isEliminated, // ✅ NOUVEAU
     isConnected: session.connectedPlayers.includes(player.id),
-    percentageOfTotal: session.globalTime > 0 
-      ? Math.round((player.time / session.globalTime) * 100) 
+    percentageRemaining: session.timeLimit > 0
+      ? Math.round((player.time / session.timeLimit) * 100)
       : 0,
     rank: rank,
     totalPlayers: session.players.length,
@@ -253,7 +260,7 @@ app.get('/api/party/:sessionId/player/:playerId', (req, res) => {
   });
 });
 
-// ✅ NOUVEAU : Liste de toutes les sessions actives (utile pour admin)
+//  Liste de toutes les sessions actives (utile pour admin)
 app.get('/api/sessions', (req, res) => {
   const sessions = Array.from(gameSessions.values()).map(session => ({
     sessionId: session.id,
@@ -263,7 +270,9 @@ app.get('/api/sessions', (req, res) => {
     status: session.status,
     playerCount: session.players.length,
     connectedPlayers: session.connectedPlayers.length,
+    eliminatedPlayers: session.players.filter(p => p.isEliminated).length,
     globalTime: session.globalTime,
+    timeLimit: session.timeLimit,
     createdAt: session.createdAt,
     lastUpdate: session.lastUpdate
   }));
@@ -323,47 +332,74 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
 
-    // En mode distribué, ne pas permettre de toggle si la partie n'est pas démarrée
     if (session.displayMode === 'distributed' && session.status !== 'started') {
-      console.log(`Toggle refusé : partie ${sessionId} pas encore démarrée`);
       return;
     }
 
     if (session.mode === 'sequential') {
-      // Mode séquentiel : seul le joueur actif peut être togglé
       const currentPlayer = session.players[session.currentPlayerIndex];
       
       if (!currentPlayer || currentPlayer.id !== playerId) {
-        // Joueur non actif essaie de cliquer → ignorer
+        return;
+      }
+
+      // ✅ Vérifier si le joueur actuel est éliminé
+      if (currentPlayer.isEliminated) {
+        console.log(`Joueur ${currentPlayer.name} est éliminé, skip automatique`);
+        // Auto-skip vers le prochain joueur non éliminé
+        let nextIndex = (session.currentPlayerIndex + 1) % session.players.length;
+        let attempts = 0;
+        
+        while (session.players[nextIndex].isEliminated && attempts < session.players.length) {
+          nextIndex = (nextIndex + 1) % session.players.length;
+          attempts++;
+        }
+        
+        // Si tous éliminés
+        if (attempts >= session.players.length) {
+          session.status = 'finished';
+          console.log(`Session ${sessionId} terminée : tous les joueurs éliminés`);
+          io.to(sessionId).emit('session-state', session);
+          return;
+        }
+        
+        session.currentPlayerIndex = nextIndex;
+        session.players[nextIndex].isRunning = true;
+        io.to(sessionId).emit('session-state', session);
         return;
       }
 
       if (currentPlayer.isRunning) {
-        // Le joueur actif clique sur "Suivant" → passer au suivant
         currentPlayer.isRunning = false;
-        session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
         
-        // ✅ Lancer automatiquement le chrono du joueur suivant
-        const nextPlayer = session.players[session.currentPlayerIndex];
-        if (nextPlayer) {
-          nextPlayer.isRunning = true;
-          console.log(`Passage automatique au joueur ${nextPlayer.name} (ID: ${nextPlayer.id})`);
+        // Passer au suivant (en skippant les éliminés)
+        let nextIndex = (session.currentPlayerIndex + 1) % session.players.length;
+        let attempts = 0;
+        
+        while (session.players[nextIndex].isEliminated && attempts < session.players.length) {
+          nextIndex = (nextIndex + 1) % session.players.length;
+          attempts++;
+        }
+        
+        if (attempts >= session.players.length) {
+          session.status = 'finished';
+          console.log(`Session ${sessionId} terminée : tous éliminés`);
+        } else {
+          session.currentPlayerIndex = nextIndex;
+          session.players[nextIndex].isRunning = true;
         }
       } else {
-        // Le joueur actif (en pause) clique sur "Démarrer"
         currentPlayer.isRunning = true;
       }
     } else {
-      // Mode indépendant : toggle le joueur
+      // Mode indépendant
       const player = session.players.find(p => p.id === playerId);
-      if (player) {
+      if (player && !player.isEliminated) {
         player.isRunning = !player.isRunning;
       }
     }
 
     session.lastUpdate = new Date();
-    
-    // Émettre immédiatement la mise à jour
     io.to(sessionId).emit('session-state', session);
   });
 
@@ -374,13 +410,11 @@ io.on('connection', (socket) => {
 
     // Vérification : seul le créateur (joueur 0) peut skip
     if (requesterId !== 0) {
-      console.log(`Skip refusé : seul le créateur (0) peut skip, pas ${requesterId}`);
       return;
     }
 
     // Vérification : mode séquentiel uniquement
     if (session.mode !== 'sequential') {
-      console.log('Skip refusé : mode non séquentiel');
       return;
     }
 
@@ -390,15 +424,20 @@ io.on('connection', (socket) => {
       currentPlayer.isRunning = false;
     }
 
-    // Passer au joueur suivant
-    session.currentPlayerIndex = (session.currentPlayerIndex + 1) % session.players.length;
+// Skip vers le prochain non éliminé
+    let nextIndex = (session.currentPlayerIndex + 1) % session.players.length;
+    let attempts = 0;
     
-    // ✅ Démarrer automatiquement le chrono du suivant MÊME s'il est déconnecté
-    const nextPlayer = session.players[session.currentPlayerIndex];
-    if (nextPlayer) {
-      nextPlayer.isRunning = true;
-      const isConnected = session.connectedPlayers?.includes(nextPlayer.id);
-      console.log(`Skip effectué : chrono lancé automatiquement pour ${nextPlayer.name} (ID: ${nextPlayer.id}, connecté: ${isConnected ? 'oui' : 'non'})`);
+    while (session.players[nextIndex].isEliminated && attempts < session.players.length) {
+      nextIndex = (nextIndex + 1) % session.players.length;
+      attempts++;
+    }
+    
+    if (attempts >= session.players.length) {
+      session.status = 'finished';
+    } else {
+      session.currentPlayerIndex = nextIndex;
+      session.players[nextIndex].isRunning = true;
     }
 
     session.lastUpdate = new Date();
@@ -411,11 +450,38 @@ io.on('connection', (socket) => {
 
     const player = session.players.find(p => p.id === playerId);
     if (player) {
-      // Ne mettre à jour que si le nouveau temps est supérieur
-      if (time >= player.time) {
-        player.time = time;
+      player.time = Math.max(0, time); // Ne jamais descendre sous 0
+
+      // ✅ Check élimination
+      if (player.time <= 0 && !player.isEliminated) {
+        player.isEliminated = true;
+        player.isRunning = false;
+        console.log(`🚫 Joueur ${player.name} éliminé !`);
+        
+        // ✅ Vérifier si tous éliminés
+        const allEliminated = session.players.every(p => p.isEliminated);
+        if (allEliminated) {
+          session.status = 'finished';
+          console.log(`Session ${sessionId} terminée : tous éliminés`);
+        } else if (session.mode === 'sequential' && session.players[session.currentPlayerIndex].id === playerId) {
+          // Si c'était le joueur actuel, passer au suivant
+          let nextIndex = (session.currentPlayerIndex + 1) % session.players.length;
+          let attempts = 0;
+          
+          while (session.players[nextIndex].isEliminated && attempts < session.players.length) {
+            nextIndex = (nextIndex + 1) % session.players.length;
+            attempts++;
+          }
+          
+          if (attempts < session.players.length) {
+            session.currentPlayerIndex = nextIndex;
+            session.players[nextIndex].isRunning = true;
+          }
+        }
       }
+      
       session.lastUpdate = new Date();
+      io.to(sessionId).emit('session-state', session);
     }
   });
 
@@ -423,10 +489,7 @@ io.on('connection', (socket) => {
     const session = gameSessions.get(sessionId);
     if (!session) return;
 
-    // Ne mettre à jour que si le nouveau temps est supérieur
-    if (globalTime >= session.globalTime) {
-      session.globalTime = globalTime;
-    }
+    session.globalTime = globalTime;
     session.lastUpdate = new Date();
   });
 
@@ -435,11 +498,13 @@ io.on('connection', (socket) => {
     if (!session) return;
 
     session.players.forEach(p => {
-      p.time = 0;
+      p.time = session.timeLimit;
       p.isRunning = false;
+      p.isEliminated = false;
     });
-    session.globalTime = 0;
+    session.globalTime = session.timeLimit * session.players.length;
     session.currentPlayerIndex = 0;
+    session.status = session.displayMode === 'distributed' ? 'lobby' : 'started';
     session.lastUpdate = new Date();
 
     io.to(sessionId).emit('session-state', session);
@@ -479,9 +544,7 @@ io.on('connection', (socket) => {
       if (session) {
         const index = session.connectedPlayers.indexOf(socket.data.playerId);
         if (index > -1) {
-          session.connectedPlayers.splice(index, 1);
-          console.log(`Joueur ${socket.data.playerId} déconnecté de la session ${socket.data.sessionId}`);
-          
+          session.connectedPlayers.splice(index, 1);          
           // Notifier les autres clients
           io.to(socket.data.sessionId).emit('session-state', session);
         }
@@ -589,28 +652,4 @@ const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📡 API REST: http://0.0.0.0:${PORT}/api`);
-  console.log(`🔌 WebSocket: ws://0.0.0.0:${PORT}`);
-  console.log(`📊 Health: http://0.0.0.0:${PORT}/health`);
-  console.log('');
-  console.log('⏰ Keep-alive intelligent activé :');
-  console.log(`   • Auto-ping : ${KEEP_ALIVE_CONFIG.startHour}h-${KEEP_ALIVE_CONFIG.endHour}h (15h/jour)`);
-  console.log(`   • Serveur éteint : 0h-9h (économie maximale)`);
-  console.log(`   • Jours actifs : Lun-Dim (7j/7)`);
-  console.log(`   • Intervalle : ${KEEP_ALIVE_CONFIG.pingInterval / 60000}min`);
-  console.log(`   • Mode adaptatif : Actif si sessions ou activité récente`);
-  
-  // Calculer consommation estimée
-  const activeHoursPerDay = KEEP_ALIVE_CONFIG.endHour - KEEP_ALIVE_CONFIG.startHour;
-  const activeDaysPerWeek = Object.values(KEEP_ALIVE_CONFIG.activeDays).filter(d => d).length;
-  const estimatedHoursPerMonth = (activeHoursPerDay * activeDaysPerWeek * 4.3);
-  
-  console.log('');
-  console.log(`📈 Consommation estimée : ${Math.round(estimatedHoursPerMonth)}h/mois (limite: 500h)`);
-  
-  if (estimatedHoursPerMonth > 500) {
-    console.log('⚠️  ATTENTION : Risque de dépassement de la limite gratuite');
-  } else {
-    console.log(`✅ Marge disponible : ${Math.round(500 - estimatedHoursPerMonth)}h/mois`);
-  }
 });

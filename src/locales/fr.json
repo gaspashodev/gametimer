@@ -28,7 +28,17 @@
     "player": "Joueur",
     "noConnection": "Connexion impossible",
     "errorCreatingGame": "Impossible de créer la partie. Vérifiez votre connexion internet.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "timePerPlayer": "Temps par joueur",
+    "customTime": "Temps personnalisé",
+    "enterMinutes": "Entrez le nombre de minutes",
+    "timeFormatHint": "Ex: 1:30 (1 min 30s) ou 45 (45s)",
+    "invalidTimeFormat": "Format invalide. Utilisez MM:SS ou SS",
+    "validate": "Valider",
+    "selectedTime": "Temps sélectionné",
+    "minutes": "minutes",
+    "invalidTime": "Veuillez entrer un temps valide (supérieur à 0)",
+    "timeLimitRequired": "Vous devez choisir un temps limite pour chaque joueur"
   },
   "join": {
     "title": "Rejoindre une partie",
@@ -117,6 +127,11 @@
     "joinMyGame": "Rejoignez ma partie !",
     "codeToJoin": "Entrez ce code dans l'app Timer Multi-Joueurs pour nous rejoindre !",
     "you": "(Vous)",
-    "confirmSkipPlayer": "Voulez-vous passer le tour de {{player}} ?"
+    "confirmSkipPlayer": "Voulez-vous passer le tour de {{player}} ?",
+    "timeRemaining": "Temps restant",
+    "eliminated": "Éliminé",
+    "timeUp": "Temps écoulé !",
+    "allEliminated": "Tous les joueurs ont été éliminés !",
+    "viewStats": "Voir les statistiques"
   }
 }

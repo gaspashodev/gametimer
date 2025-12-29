@@ -31,6 +31,27 @@ import ApiService from '../services/ApiService';
 import { formatTime } from '../utils/helpers';
 import { useLanguage } from '../contexts/LanguageContext';
 
+// ✅ Fonction pour déterminer la couleur du timer selon le temps restant
+const getPlayerColor = (player, session, colors) => {
+  if (player.isEliminated) {
+    return '#991B1B'; // Rouge foncé (éliminé)
+  }
+  
+  if (!session.timeLimit) return colors.secondary;
+  
+  const percentage = (player.time / session.timeLimit) * 100;
+  
+  if (percentage <= 10) {
+    return '#DC2626'; // Rouge (critique)
+  } else if (percentage <= 25) {
+    return '#F59E0B'; // Orange (warning)
+  } else if (player.isRunning) {
+    return colors.secondary; // Vert (en cours)
+  } else {
+    return colors.primary; // Violet (inactif)
+  }
+};
+
 const GameDistributedScreen = ({ route, navigation }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const { sessionId, joinCode, mode, myPlayerId } = route.params;
@@ -41,6 +62,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [sessionStatus, setSessionStatus] = useState('lobby');
   const [connectedPlayers, setConnectedPlayers] = useState([]);
   const [playerOrder, setPlayerOrder] = useState([]); // Ordre personnalisé des joueurs dans le lobby
+  const [session, setSession] = useState(null);
   const { t } = useLanguage();
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
@@ -71,6 +93,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
       },
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
+        setSession(session); // ✅ AJOUTÉ : Stocker la session
+
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
@@ -89,6 +113,20 @@ const GameDistributedScreen = ({ route, navigation }) => {
         setCurrentPlayerIndex(session.currentPlayerIndex);
         setSessionStatus(session.status || 'started');
         setConnectedPlayers(session.connectedPlayers || []);
+
+        // Détecter fin de partie
+        if (session.status === 'finished') {
+          Alert.alert(
+            t('distributed.allEliminated'),
+            t('distributed.viewStats'),
+            [
+              {
+                text: 'OK',
+                onPress: () => navigation.replace('PartyStats', { sessionId })
+              }
+            ]
+          );
+        }
       },
     };
 
@@ -102,8 +140,10 @@ const GameDistributedScreen = ({ route, navigation }) => {
   }, [sessionId, myPlayerId]);
 
   useEffect(() => {
-    const total = players.reduce((sum, player) => sum + player.time, 0);
-    setGlobalTime(total);
+    if (players.length > 0 && globalTime === 0) {
+      const total = players.reduce((sum, player) => sum + player.time, 0);
+      setGlobalTime(total);
+    }
   }, [players]);
 
   useEffect(() => {
@@ -114,7 +154,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
         setPlayers((prev) => {
           return prev.map((p) => {
             if (p.id === myPlayerId) {
-              const newTime = p.time + 1;
+              const newTime = Math.max(0, p.time - 1);
               
               if (newTime % 3 === 0) {
                 ApiService.updateTime(sessionId, myPlayerId, newTime);
@@ -147,7 +187,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
         setPlayers((prev) => {
           return prev.map((p) => {
             if (p.id !== myPlayerId && p.isRunning) {
-              return { ...p, time: p.time + 1 };
+              return { ...p, time: Math.max(0, p.time - 1) };
             }
             return p;
           });
@@ -174,6 +214,15 @@ const GameDistributedScreen = ({ route, navigation }) => {
     
     if (mode === 'sequential' && !isMyTurn) {
       Alert.alert(t('distributed.caution'), t('distributed.notYourTurn'));
+      return;
+    }
+    
+    // ✅ CORRIGÉ : Vérifier élimination AVANT update
+    if (myPlayer?.isEliminated) {
+      Alert.alert(
+        t('distributed.eliminated'),
+        t('distributed.timeUp')
+      );
       return;
     }
     
@@ -597,18 +646,15 @@ const GameDistributedScreen = ({ route, navigation }) => {
           <View
             style={[
               styles.myPlayerCard,
-              {
-                backgroundColor: myPlayer.isRunning
-                  ? colors.secondary
-                  : isMyTurn && !myPlayer.isRunning
-                    ? colors.warning
-                    : colors.card,
-                borderColor: myPlayer.isRunning
-                  ? colors.secondary
-                  : isMyTurn && !myPlayer.isRunning
-                    ? colors.warning
-                    : colors.cardBorder,
+              { 
+                backgroundColor: colors.card,
+                borderColor: myPlayer?.isEliminated 
+                  ? '#DC2626'
+                  : myPlayer?.isRunning 
+                    ? colors.secondary 
+                    : colors.cardBorder 
               },
+              myPlayer?.isEliminated && styles.myPlayerCardEliminated,
             ]}
           >
             <Text style={[styles.myPlayerLabel, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.textSecondary }]}>
@@ -617,35 +663,41 @@ const GameDistributedScreen = ({ route, navigation }) => {
             <Text style={[styles.myPlayerName, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.text }]}>
               {myPlayer.name}
             </Text>
-            <Text style={[styles.myPlayerTime, { color: myPlayer.isRunning || isMyTurn ? '#fff' : colors.text }]}>
+            <Text 
+              style={[
+                styles.myPlayerTime,
+                { color: getPlayerColor(myPlayer, session || {}, colors) }
+              ]}
+            >
               {formatTime(myPlayer.time)}
             </Text>
 
             <TouchableOpacity
-              style={styles.mainButton}
+              style={[
+                styles.mainButton,
+                myPlayer?.isEliminated && styles.mainButtonDisabled,
+                mode === 'sequential' && !isMyTurn && styles.mainButtonDisabled,
+                myPlayer?.isRunning ? styles.pauseButton : styles.playButton,
+              ]}
               onPress={toggleMyPlayer}
-              disabled={mode === 'sequential' && !isMyTurn}
-              activeOpacity={0.9}
+              disabled={myPlayer?.isEliminated || (mode === 'sequential' && !isMyTurn)}
             >
-              <LinearGradient
-                colors={
-                  mode === 'sequential' && !isMyTurn
-                    ? [colors.disabled, colors.disabled]
-                    : myPlayer.isRunning
-                      ? ['#F59E0B', '#D97706']
-                      : colors.primaryGradient
-                }
-                style={styles.mainButtonGradient}
-              >
-                <ActionIcon size={32} color="#fff" strokeWidth={2} />
-                <Text style={styles.mainButtonText}>
-                  {myPlayer.isRunning
-                    ? mode === 'sequential'
-                      ? t('distributed.skipToNext')
-                      : t('distributed.pause')
-                    : t('distributed.start')}
-                </Text>
-              </LinearGradient>
+              {myPlayer?.isEliminated ? (
+                <>
+                  <Text style={styles.mainButtonText}>{t('distributed.eliminated')}</Text>
+                </>
+              ) : (
+                <>
+                  {myPlayer?.isRunning ? <Pause size={40} color="#fff" /> : <Play size={40} color="#fff" />}
+                  <Text style={styles.mainButtonText}>
+                    {myPlayer?.isRunning
+                      ? mode === 'sequential'
+                        ? t('distributed.skipToNext')
+                        : t('distributed.pause')
+                      : t('distributed.start')}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
 
             {mode === 'sequential' && !isMyTurn && (
@@ -663,23 +715,38 @@ const GameDistributedScreen = ({ route, navigation }) => {
             {players
               .filter((p) => p.id !== myPlayerId)
               .map((player) => (
-                <View key={player.id} style={[styles.otherPlayerCard, { 
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F9FAFB' 
-                }]}>
-                  <View style={styles.otherPlayerLeft}>
-                    <Text style={[styles.otherPlayerName, { color: colors.text }]}>
+                <View 
+                  key={player.id} 
+                  style={[
+                    styles.otherPlayerCard,
+                    { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)' },
+                    player.isEliminated && styles.otherPlayerCardEliminated,
+                  ]}
+                >
+                  <View style={styles.otherPlayerInfo}>
+                    <Text 
+                      style={[
+                        styles.otherPlayerName, 
+                        { color: colors.text },
+                        player.isEliminated && { color: '#9CA3AF' }
+                      ]}
+                    >
                       {player.name}
+                      {player.isEliminated && ' ⚫'}
                     </Text>
-                    {player.isRunning && (
-                      <View style={styles.runningBadge}>
-                        <View style={[styles.runningDot, { backgroundColor: colors.success }]} />
-                        <Text style={[styles.runningText, { color: colors.success }]}>
-                          {t('distributed.live')}
-                        </Text>
-                      </View>
+                    {player.isRunning && !player.isEliminated && (
+                      <Play size={20} color={colors.secondary} />
                     )}
                   </View>
-                  <Text style={[styles.otherPlayerTime, { color: colors.text }]}>
+                  <Text 
+                    style={[
+                      styles.otherPlayerTime,
+                      { 
+                        color: getPlayerColor(player, session || {}, colors),
+                        fontFamily: 'monospace' 
+                      }
+                    ]}
+                  >
                     {formatTime(player.time)}
                   </Text>
                 </View>
@@ -1113,6 +1180,19 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     fontFamily: 'monospace',
+  },
+  myPlayerCardEliminated: {
+    opacity: 0.6,
+    borderWidth: 3,
+    borderColor: '#DC2626',
+  },
+  mainButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.5,
+  },
+  otherPlayerCardEliminated: {
+    opacity: 0.5,
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
   },
 });
 

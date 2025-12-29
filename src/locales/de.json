@@ -28,7 +28,17 @@
     "player": "Spieler",
     "noConnection": "Verbindung nicht möglich",
     "errorCreatingGame": "Spiel konnte nicht erstellt werden. Überprüfen Sie Ihre Internetverbindung.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "timePerPlayer": "Zeit pro Spieler",
+    "customTime": "Benutzerdefinierte Zeit",
+    "enterMinutes": "Minuten eingeben",
+      "timeFormatHint": "Z.B.: 1:30 (1 Min 30s) oder 45 (45s)",
+  "invalidTimeFormat": "Ungültiges Format. Verwenden Sie MM:SS oder SS",
+    "validate": "Bestätigen",
+    "selectedTime": "Ausgewählte Zeit",
+    "minutes": "Minuten",
+    "invalidTime": "Bitte gib eine gültige Zeit ein (größer als 0)",
+    "timeLimitRequired": "Du musst ein Zeitlimit für jeden Spieler wählen"
   },
   "join": {
     "title": "Einem Spiel beitreten",
@@ -117,6 +127,11 @@
     "joinMyGame": "Tritt meinem Spiel bei!",
     "codeToJoin": "Gib diesen Code in der Mehrspieler-Timer App ein, um uns beizutreten!",
     "you": "(Du)",
-    "confirmSkipPlayer": "Möchten Sie den Zug von {{player}} überspringen?"
+    "confirmSkipPlayer": "Möchten Sie den Zug von {{player}} überspringen?",
+    "timeRemaining": "Verbleibende Zeit",
+    "eliminated": "Ausgeschieden",
+    "timeUp": "Zeit ist um!",
+    "allEliminated": "Alle Spieler wurden eliminiert!",
+    "viewStats": "Statistiken ansehen"
   }
 }

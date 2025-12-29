@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +18,7 @@ import {
   Wifi,
   Minus,
   Plus,
+  Clock,
 } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import ApiService from '../services/ApiService';
@@ -33,6 +35,14 @@ const ConfigScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const { t } = useLanguage();
   const [loadingMessage, setLoadingMessage] = useState(t('join.creatingGame'));
+  
+  // ✅ Temps limite en secondes
+  const [timeLimit, setTimeLimit] = useState(null); // null ou nombre en secondes
+  const [customTime, setCustomTime] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  // Temps prédéfinis en minutes (seront convertis en secondes)
+  const presetTimes = [5, 10, 15, 20, 30, 60];
 
   // ✅ Charger le pseudo sauvegardé au démarrage
   useEffect(() => {
@@ -54,6 +64,75 @@ const ConfigScreen = ({ navigation }) => {
     if (numPlayers > 2) setNumPlayers(numPlayers - 1);
   };
 
+  // ✅ Sélectionner un temps prédéfini
+  const selectPresetTime = (minutes) => {
+    setTimeLimit(minutes * 60); // Convertir minutes en secondes
+    setShowCustomInput(false);
+    setCustomTime('');
+  };
+
+  // ✅ Activer l'input personnalisé
+  const enableCustomTime = () => {
+    setShowCustomInput(true);
+    setTimeLimit(null);
+  };
+
+    // ✅ Parser le format MM:SS ou SS
+  const parseTimeInput = (input) => {
+    // Nettoyer l'input
+    const cleaned = input.trim();
+    
+    // Format MM:SS
+    if (cleaned.includes(':')) {
+      const parts = cleaned.split(':');
+      if (parts.length !== 2) return null;
+      
+      const minutes = parseInt(parts[0]);
+      const seconds = parseInt(parts[1]);
+      
+      if (isNaN(minutes) || isNaN(seconds) || seconds >= 60 || seconds < 0) {
+        return null;
+      }
+      
+      return minutes * 60 + seconds;
+    }
+    
+    // Format secondes uniquement
+    const seconds = parseInt(cleaned);
+    if (isNaN(seconds) || seconds <= 0) {
+      return null;
+    }
+    
+    return seconds;
+  };
+
+  // ✅ Valider le temps personnalisé
+  const validateCustomTime = () => {
+    const time = parseInt(customTime);
+    if (isNaN(time) || time <= 0) {
+      Alert.alert(t('join.error'), t('config.invalidTime'));
+      return;
+    }
+    setTimeLimit(time);
+    setShowCustomInput(false);
+  };
+
+    // ✅ Formater le temps pour l'affichage (secondes → MM:SS ou Xmin)
+  const formatTimeDisplay = (seconds) => {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    
+    if (secs === 0) {
+      return `${mins} ${t('config.minutes')}`;
+    }
+    
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const createSession = async () => {
     if (numPlayers < 2 || numPlayers > 10) {
       Alert.alert(t('join.error'), t('config.numberPlayers'));
@@ -62,6 +141,12 @@ const ConfigScreen = ({ navigation }) => {
 
     if (!creatorName.trim()) {
       Alert.alert(t('join.error'), t('config.selectPseudo'));
+      return;
+    }
+
+    // ✅ Validation : temps obligatoire
+    if (!timeLimit || timeLimit <= 0) {
+      Alert.alert(t('join.error'), t('config.timeLimitRequired'));
       return;
     }
 
@@ -85,11 +170,13 @@ const ConfigScreen = ({ navigation }) => {
         playerNames.push(t('config.player') + ' ' + (i + 1));
       }
       
+      // ✅ Passer le temps limite en secondes
       const data = await ApiService.createSession(
         mode,
         numPlayers,
         displayMode,
-        playerNames
+        playerNames,
+        timeLimit * 60 // Convertir minutes en secondes
       );
 
       setLoading(false);
@@ -118,7 +205,7 @@ const ConfigScreen = ({ navigation }) => {
     }
   };
 
-  const canCreate = creatorName.trim().length > 0 && !loading;
+  const canCreate = creatorName.trim().length > 0 && !loading && timeLimit > 0;
 
   return (
     <LinearGradient
@@ -126,7 +213,7 @@ const ConfigScreen = ({ navigation }) => {
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Header avec switch thème */}
+        {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
           <TouchableOpacity 
             style={[styles.backButton, { backgroundColor: colors.card }]}
@@ -222,9 +309,8 @@ const ConfigScreen = ({ navigation }) => {
 
           {/* Mode de jeu */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Mode de jeu</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('config.gameMode')}</Text>
               <View style={styles.optionRow}>
-                {/* Suppression du LinearGradient imbriqué */}
                 <TouchableOpacity
                   style={[
                     styles.optionCard, 
@@ -295,12 +381,117 @@ const ConfigScreen = ({ navigation }) => {
               </View>
             </View>
 
+            {/* Temps par joueur */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                {t('config.timePerPlayer')}
+              </Text>
+              
+              {/* Boutons temps prédéfinis */}
+              <View style={styles.timeGrid}>
+                {presetTimes.map((time) => (
+                  <TouchableOpacity
+                    key={time}
+                    style={[
+                      styles.timeButton,
+                      { 
+                        backgroundColor: timeLimit === time 
+                          ? (isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)')
+                          : colors.card,
+                        borderColor: timeLimit === time ? '#EF4444' : colors.cardBorder 
+                      }
+                    ]}
+                    onPress={() => selectPresetTime(time)}
+                    activeOpacity={0.8}
+                  >
+                    <Clock 
+                      size={20} 
+                      color={timeLimit === time ? '#EF4444' : colors.textSecondary}
+                      strokeWidth={2}
+                    />
+                    <Text style={[
+                      styles.timeButtonText,
+                      { color: timeLimit === time ? '#EF4444' : colors.text }
+                    ]}>
+                      {time}
+                    </Text>
+                    <Text style={[
+                      styles.timeButtonLabel,
+                      { color: timeLimit === time ? '#EF4444' : colors.textSecondary }
+                    ]}>
+                      min
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Bouton temps personnalisé */}
+              <TouchableOpacity
+                style={[
+                  styles.customTimeButton,
+                  { 
+                    backgroundColor: showCustomInput || (timeLimit && !presetTimes.includes(timeLimit))
+                      ? (isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)')
+                      : colors.card,
+                    borderColor: showCustomInput || (timeLimit && !presetTimes.includes(timeLimit))
+                      ? '#EF4444' 
+                      : colors.cardBorder 
+                  }
+                ]}
+                onPress={enableCustomTime}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  styles.customTimeButtonText,
+                  { color: showCustomInput ? '#EF4444' : colors.text }
+                ]}>
+                  {t('config.customTime')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Input personnalisé */}
+              {showCustomInput && (
+                <View style={[styles.customInputContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <TextInput
+                    style={[styles.customInput, { color: colors.text }]}
+                    placeholder="MM:SS ou SS"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numbers-and-punctuation"
+                    value={customTime}
+                    onChangeText={setCustomTime}
+                    maxLength={6}
+                  />
+                  <TouchableOpacity
+                    style={[styles.validateButton, { backgroundColor: '#EF4444' }]}
+                    onPress={validateCustomTime}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.validateButtonText}>{t('config.validate')}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {showCustomInput && (
+                <Text style={[styles.formatHint, { color: colors.textSecondary }]}>
+                  {t('config.timeFormatHint')}
+                </Text>
+              )}
+
+              {/* Affichage du temps sélectionné */}
+              {timeLimit && (
+                <View style={[styles.selectedTimeCard, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)' }]}>
+                  <Clock size={20} color="#EF4444" strokeWidth={2} />
+                  <Text style={[styles.selectedTimeText, { color: colors.text }]}>
+                    {t('config.selectedTime')}: {timeLimit} {t('config.minutes')}
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* Nombre de joueurs */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
                 {t('config.playerCount')} : {numPlayers}
               </Text>
-              {/* Pas de LinearGradient imbriqué */}
               <View style={[styles.playerSelectorCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 <TouchableOpacity
                   style={[
@@ -333,7 +524,7 @@ const ConfigScreen = ({ navigation }) => {
             </View>
         </ScrollView>
 
-        {/* Bouton créer - Dégradé sur CTA principal */}
+        {/* Bouton créer */}
         <View style={[styles.footer, { backgroundColor: colors.backgroundSolid }]}>
           <TouchableOpacity
             style={[styles.createButton, !canCreate && { opacity: 0.5 }]}
@@ -388,13 +579,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     zIndex: 0,
   },
-  themeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   scrollView: {
     flex: 1,
   },
@@ -434,28 +618,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     paddingHorizontal: 8,
+    width: '100%', // ✅ Centrage multi-lignes
+    lineHeight: 22, // ✅ Centrage multi-lignes
   },
   optionDescription: {
     fontSize: 11,
     textAlign: 'center',
-  },
-  inputCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  helpText: {
-    fontSize: 12,
-    marginTop: 8,
+    width: '100%', // ✅ Centrage multi-lignes
+    paddingHorizontal: 4, // ✅ Centrage multi-lignes
+    lineHeight: 16, // ✅ Centrage multi-lignes
   },
   playerSelectorCard: {
     flexDirection: 'row',
@@ -476,6 +647,82 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
   },
+  
+  // Section temps limite
+  timeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  timeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 6,
+    minWidth: '30%',
+    flex: 1,
+  },
+  timeButtonText: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  timeButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  customTimeButton: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  customTimeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  customInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+    marginBottom: 12,
+  },
+  customInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    padding: 8,
+  },
+  validateButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  validateButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectedTimeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    gap: 10,
+  },
+  selectedTimeText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   footer: {
     position: 'absolute',
     bottom: 0,

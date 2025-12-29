@@ -28,7 +28,17 @@
     "player": "Player",
     "noConnection": "Connection failed",
     "errorCreatingGame": "Unable to create the game. Please check your internet connection.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "timePerPlayer": "Time per Player",
+    "customTime": "Custom Time",
+    "enterMinutes": "Enter minutes",
+    "timeFormatHint": "Ex: 1:30 (1 min 30s) or 45 (45s)",
+    "invalidTimeFormat": "Invalid format. Use MM:SS or SS",
+    "validate": "Validate",
+    "selectedTime": "Selected time",
+    "minutes": "minutes",
+    "invalidTime": "Please enter a valid time (greater than 0)",
+    "timeLimitRequired": "You must choose a time limit for each player"
     },
     "join": {
     "title": "Join a game",
@@ -116,6 +126,11 @@
   "joinMyGame": "Join my game!",
   "codeToJoin": "Enter this code in the Multiplayer Timer app to join us!",
   "you": "(You)",
-  "confirmSkipPlayer": "Do you want to skip {{player}}'s turn?"
+  "confirmSkipPlayer": "Do you want to skip {{player}}'s turn?",
+  "timeRemaining": "Time remaining",
+    "eliminated": "Eliminated",
+    "timeUp": "Time's up!",
+    "allEliminated": "All players have been eliminated!",
+    "viewStats": "View statistics"
 }
 }
