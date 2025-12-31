@@ -208,9 +208,6 @@ const PartyStatsScreen = ({ route, navigation }) => {
                   <Text style={[styles.rankingTime, { color: colors.text }]}>
                     {player.timeFormatted}
                   </Text>
-                  <Text style={[styles.rankingPercentage, { color: colors.textSecondary }]}>
-                    {player.percentageOfTotal}%
-                  </Text>
                 </View>
               </View>
             ))}
@@ -432,10 +429,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     fontFamily: 'monospace',
-  },
-  rankingPercentage: {
-    fontSize: 12,
-    marginTop: 2,
   },
   actionsContainer: {
     gap: 12,

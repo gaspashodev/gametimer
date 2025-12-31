@@ -25,6 +25,7 @@ import ApiService from '../services/ApiService';
 import StorageService from '../services/StorageService';
 import LoadingOverlay from '../components/LoadingOverlay';
 import { useLanguage } from '../contexts/LanguageContext';
+import { Picker } from '@react-native-picker/picker';
 
 const ConfigScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();

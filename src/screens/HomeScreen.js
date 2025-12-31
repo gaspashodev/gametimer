@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TextInput,
   Keyboard,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -79,17 +80,14 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.centeredContent}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <LinearGradient
-                colors={colors.primaryGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.iconGradient}
-              >
-                <Timer size={64} color="#fff" strokeWidth={2} />
-              </LinearGradient>
-            </View>
-            <Text style={[styles.title, { color: colors.text }]}>{t('home.title')}</Text>
+            <Image 
+              source={isDark 
+                ? require('../../assets/images/logo_tymr_dark.png')
+                : require('../../assets/images/logo_tymr_light.png')
+              }
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               {t('home.subtitle')}
             </Text>
@@ -205,16 +203,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  iconContainer: {
-    marginBottom: 24,
-  },
-  iconGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  logo: {
+  width: 400,
+  height: 160,
+  marginTop: 20,
+  marginBottom: 12,
+},
   title: {
     fontSize: 32,
     fontWeight: 'bold',

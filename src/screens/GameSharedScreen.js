@@ -45,15 +45,18 @@ const getPlayerColor = (player, session, colors) => {
 };
 
 const GameSharedScreen = ({ route, navigation }) => {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors, isDark } = useTheme();
   const { sessionId, joinCode, mode } = route.params;
   const [players, setPlayers] = useState([]);
   const [globalTime, setGlobalTime] = useState(0);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [session, setSession] = useState(null); // ✅ AJOUTÉ : Stocker la session
+  const [session, setSession] = useState(null);
   const { t } = useLanguage();
+
+  // ✅ Styles dynamiques basés sur le thème
+  const styles = getStyles(colors, isDark);
 
   const playerIntervalsRef = useRef({});
   const globalTimeRef = useRef(0);
@@ -72,7 +75,6 @@ const GameSharedScreen = ({ route, navigation }) => {
       onConnect: () => setIsConnected(true),
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        setSession(session); // ✅ AJOUTÉ : Stocker la session
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
           
@@ -88,23 +90,11 @@ const GameSharedScreen = ({ route, navigation }) => {
         
         setPlayers(updatedPlayers);
         setCurrentPlayerIndex(session.currentPlayerIndex);
-        
-        // Marquer comme chargé dès qu'on a les données
+        setSession(session);
+
         if (isLoading && updatedPlayers.length > 0) {
           setIsLoading(false);
         }
-
-        // ✅ Check si tous éliminés
-          if (session.status === 'finished') {
-            Alert.alert(
-              t('distributed.allEliminated'),
-              t('distributed.viewStats'),
-              [{
-                text: 'OK',
-                onPress: () => navigation.replace('PartyStats', { sessionId })
-              }]
-            );
-          }
       },
     };
 
@@ -116,14 +106,20 @@ const GameSharedScreen = ({ route, navigation }) => {
     };
   }, [sessionId]);
 
-  useEffect(() => {
-    const total = players.reduce((sum, player) => sum + player.time, 0);
-    setGlobalTime(total);
-    
-    if (total % 3 === 0 && total > 0) {
-      ApiService.updateGlobalTime(sessionId, total);
-    }
-  }, [players, sessionId]);
+useEffect(() => {
+  // Calculer le temps total CONSOMMÉ
+  const timeLimit = session?.timeLimit || 0;
+  const total = players.reduce((sum, player) => {
+    const consumed = timeLimit > 0 ? Math.max(0, timeLimit - player.time) : player.time;
+    return sum + consumed;
+  }, 0);
+  
+  setGlobalTime(total);
+  
+  if (total % 3 === 0 && total > 0) {
+    ApiService.updateGlobalTime(sessionId, total);
+  }
+}, [players, session, sessionId]);
 
   useEffect(() => {
     players.forEach((player) => {
@@ -156,15 +152,6 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   const togglePlayer = (playerId) => {
     const player = players.find(p => p.id === playerId);
-    
-    // ✅ AJOUTÉ : Vérifier si le joueur est éliminé
-    if (player?.isEliminated) {
-      Alert.alert(
-        t('distributed.eliminated'),
-        t('distributed.timeUp')
-      );
-      return;
-    }
     if (player && player.isRunning) {
       ApiService.updateTime(sessionId, playerId, player.time);
     }
@@ -186,7 +173,7 @@ const GameSharedScreen = ({ route, navigation }) => {
   const handleReset = () => {
     Alert.alert(
       t('distributed.reset'),
-      t('distributed.resetTimers'),
+      t('distributed.verifReset'),
       [
         { text: t('distributed.cancel'), style: 'cancel' },
         {
@@ -224,15 +211,30 @@ const GameSharedScreen = ({ route, navigation }) => {
         <View
           style={[
             styles.playerCard,
-            player.isRunning && styles.playerCardActive,
-            isCurrentTurn && !player.isRunning && styles.playerCardTurn,
-            isEliminated && styles.playerCardEliminated, // ✅ NOUVEAU
+            {
+              // ✅ Couleurs dynamiques selon l'état
+              backgroundColor: isEliminated
+                ? (isDark ? 'rgba(153, 27, 27, 0.2)' : 'rgba(220, 38, 38, 0.1)')
+                : player.isRunning 
+                  ? colors.secondaryGradient[0]
+                  : colors.card,
+              borderColor: isEliminated
+                ? colors.danger
+                : player.isRunning
+                  ? colors.secondaryGradient[1]
+                  : isCurrentTurn
+                    ? colors.warning
+                    : colors.cardBorder,
+            },
+            isEliminated && styles.playerCardEliminated,
           ]}
         >
-          <Text style={[styles.playerName, { color: player.isRunning || isCurrentTurn ? '#fff' : colors.text }]}>
+          <Text style={[styles.playerName, { color: player.isRunning ? '#fff' : colors.text }
+]}>
             {player.name}
           </Text>
-          <Text style={[styles.playerTime, { color: player.isRunning || isCurrentTurn ? '#fff' : colors.text }]}>
+          <Text style={[styles.playerTime, { color: player.isRunning ? '#fff' : colors.text }
+]}>
             {formatTime(player.time)}
           </Text>
           
@@ -274,84 +276,66 @@ const GameSharedScreen = ({ route, navigation }) => {
 
   return (
     <LinearGradient colors={colors.background} style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Afficher loading tant que pas de données */}
+      <SafeAreaView style={styles.safeArea}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <Hourglass size={64} color={colors.primary} strokeWidth={2} />
-            <Text style={[styles.loadingText, { color: colors.text }]}>
-              {t('distributed.loading')}
-            </Text>
+            <Timer size={50} color={colors.primary} />
+            <Text style={styles.loadingText}>{t('distributed.loading')}</Text>
           </View>
         ) : (
           <>
-            {/* Header FIXE (non scrollable) */}
-            <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
+        <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.connectionStatus}>
-              <View style={[
-                styles.connectionDot,
-                { backgroundColor: isConnected ? colors.success : colors.danger }
-              ]} />
-              <Text style={[styles.codeText, { color: colors.textSecondary }]}>
-                 {t('distributed.code')} {joinCode}
+              <View 
+                style={[
+                  styles.connectionDot, 
+                  { backgroundColor: isConnected ? colors.success : colors.danger }
+                ]} 
+              />
+              <Text style={styles.codeText}>
+                {t('stats.code')}: {joinCode}
               </Text>
             </View>
-
             <View style={styles.headerButtons}>
               {players.some(p => p.isRunning) && (
-                <TouchableOpacity
-                  style={[styles.iconButton, { backgroundColor: colors.card }]}
-                  onPress={pauseAll}
-                  activeOpacity={0.7}
-                >
-                  <PauseCircle size={22} color={colors.warning} strokeWidth={2} />
+                <TouchableOpacity style={styles.iconButton} onPress={pauseAll}>
+                  <PauseCircle size={20} color={colors.warning} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={[styles.iconButton, { backgroundColor: colors.card }]}
-                onPress={handleReset}
-                activeOpacity={0.7}
-              >
-                <RefreshCw size={22} color={colors.danger} strokeWidth={2} />
+              <TouchableOpacity style={styles.iconButton} onPress={handleReset}>
+                <RefreshCw size={20} color={colors.danger} />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.iconButton, { backgroundColor: colors.card }]}
+              <TouchableOpacity 
+                style={styles.iconButton} 
                 onPress={() => navigation.navigate('PartyStats', { sessionId })}
-                activeOpacity={0.7}
               >
-                <BarChart3 size={22} color={colors.primary} strokeWidth={2} />
+                <BarChart3 size={20} color={colors.primary} />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.iconButton, { backgroundColor: colors.card }]}
-                onPress={handleQuit}
-                activeOpacity={0.7}
-              >
-                <DoorOpen size={22} color={colors.textSecondary} strokeWidth={2} />
+              <TouchableOpacity style={styles.iconButton} onPress={handleQuit}>
+                <DoorOpen size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Temps global - Dégradé sur élément principal */}
           <LinearGradient
             colors={colors.primaryGradient}
             style={styles.globalTimeCard}
           >
-            <Text style={styles.globalTimeLabel}>Temps Total</Text>
+            <Text style={styles.globalTimeLabel}>{t('stats.totalTime')}</Text>
             <Text style={styles.globalTime}>{formatTime(globalTime)}</Text>
           </LinearGradient>
 
           {mode === 'sequential' && (
-            <View style={[styles.turnBadge, { backgroundColor: colors.card }]}>
-              <Timer size={20} color={colors.text}  strokeWidth={2} />
-              <Text style={[styles.turnText, { color: colors.text }]}>
+            <View style={styles.turnBadge}>
+              <Hourglass size={16} color={colors.warning} />
+              <Text style={styles.turnText}>
                 {t('distributed.turnOf', { player: players[currentPlayerIndex]?.name })}
               </Text>
             </View>
           )}
         </View>
 
-        {/* Grille scrollable séparée */}
         <FlatList
           data={players}
           renderItem={renderPlayer}
@@ -368,7 +352,8 @@ const GameSharedScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+// ✅ Fonction pour créer les styles dynamiquement selon le thème
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -384,12 +369,14 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontWeight: '600',
+    color: colors.text,
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
   },
   headerTop: {
     flexDirection: 'row',
@@ -410,6 +397,7 @@ const styles = StyleSheet.create({
   codeText: {
     fontSize: 13,
     fontWeight: '600',
+    color: colors.text,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -421,13 +409,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.card,
   },
   globalTimeCard: {
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     marginBottom: 12,
-    shadowColor: '#667eea',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
@@ -455,10 +444,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     alignSelf: 'center',
+    backgroundColor: colors.card,
   },
   turnText: {
     fontSize: 15,
     fontWeight: '600',
+    color: colors.text,
   },
   playersGrid: {
     padding: 16,
@@ -468,7 +459,6 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
-  // ✅ FIX : Wrapper pour forcer 50% même avec joueurs impairs
   playerCardWrapper: {
     flex: 1,
     maxWidth: '50%',
@@ -478,18 +468,18 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     padding: 16,
     gap: 12,
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: isDark ? 0.1 : 0.1,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: isDark ? 0 : 2,
   },
   playerName: {
     fontSize: 16,
     fontWeight: '700',
   },
   playerTime: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: 'bold',
     fontFamily: 'monospace',
     textAlign: 'center',
@@ -511,8 +501,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   playerCardEliminated: {
-    backgroundColor: 'rgba(153, 27, 27, 0.2)',
-    borderColor: '#DC2626',
     opacity: 0.7,
   },
   playerButtonDisabled: {

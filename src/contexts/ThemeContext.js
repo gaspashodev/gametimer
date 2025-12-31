@@ -14,15 +14,13 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const systemColorScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState('system'); // 'light', 'dark', 'system'
+  const [themeMode, setThemeMode] = useState('system');
   const [isDark, setIsDark] = useState(systemColorScheme === 'dark');
 
-  // Charger la préférence au démarrage
   useEffect(() => {
     loadThemePreference();
   }, []);
 
-  // Appliquer le thème selon la préférence
   useEffect(() => {
     if (themeMode === 'system') {
       setIsDark(systemColorScheme === 'dark');
@@ -61,9 +59,8 @@ export const ThemeProvider = ({ children }) => {
     saveThemePreference(mode);
   };
 
-  // Palette de couleurs
   const colors = isDark ? {
-    // Dark theme
+    // Dark theme - V6 glassmorphism (NE PAS TOUCHER)
     background: ['#0F0F1E', '#1A1A2E', '#16213E'],
     backgroundSolid: '#0F0F1E',
     card: 'rgba(255, 255, 255, 0.05)',
@@ -82,11 +79,11 @@ export const ThemeProvider = ({ children }) => {
     disabled: 'rgba(255, 255, 255, 0.15)',
     disabledText: 'rgba(255, 255, 255, 0.4)',
   } : {
-    // Light theme
-    background: ['#F9FAFB', '#FFFFFF', '#F3F4F6'],
+    // Light theme - FIX bordures orange + meilleur contraste
+    background: ['#F9FAFB', '#FFFFFF', '#EEF2FF'],
     backgroundSolid: '#F9FAFB',
     card: '#FFFFFF',
-    cardBorder: '#E5E7EB',
+    cardBorder: '#E5E7EB', // ✅ Bordure grise neutre (plus d'orange!)
     text: '#1F2937',
     textSecondary: '#6B7280',
     textTertiary: '#9CA3AF',

@@ -64,6 +64,10 @@ const GameDistributedScreen = ({ route, navigation }) => {
   const [playerOrder, setPlayerOrder] = useState([]); // Ordre personnalisé des joueurs dans le lobby
   const [session, setSession] = useState(null);
   const { t } = useLanguage();
+  
+  // ✅ Styles dynamiques basés sur le thème
+  const styles = getStyles(colors, isDark);
+
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
   const isMyTurn = mode === 'sequential' && players[currentPlayerIndex]?.id === myPlayerId;
@@ -93,7 +97,8 @@ const GameDistributedScreen = ({ route, navigation }) => {
       },
       onDisconnect: () => setIsConnected(false),
       onSessionUpdate: (session) => {
-        setSession(session); // ✅ AJOUTÉ : Stocker la session
+        setSession(session);
+        setGlobalTime(session.globalTime);
 
         const updatedPlayers = session.players.map(serverPlayer => {
           const localPlayer = playersRef.current.find(p => p.id === serverPlayer.id);
@@ -109,7 +114,14 @@ const GameDistributedScreen = ({ route, navigation }) => {
         });
         
         setPlayers(updatedPlayers);
-        setGlobalTime(session.globalTime);
+        // Calculer le temps total CONSOMMÉ
+        const timeLimit = session.timeLimit || 0;
+        const totalConsumed = updatedPlayers.reduce((sum, player) => {
+          const consumed = timeLimit > 0 ? Math.max(0, timeLimit - player.time) : player.time;
+          return sum + consumed;
+        }, 0);
+
+        setGlobalTime(totalConsumed);
         setCurrentPlayerIndex(session.currentPlayerIndex);
         setSessionStatus(session.status || 'started');
         setConnectedPlayers(session.connectedPlayers || []);
@@ -138,13 +150,6 @@ const GameDistributedScreen = ({ route, navigation }) => {
       if (otherPlayersIntervalRef.current) clearInterval(otherPlayersIntervalRef.current);
     };
   }, [sessionId, myPlayerId]);
-
-  useEffect(() => {
-    if (players.length > 0 && globalTime === 0) {
-      const total = players.reduce((sum, player) => sum + player.time, 0);
-      setGlobalTime(total);
-    }
-  }, [players]);
 
   useEffect(() => {
     const isRunning = myPlayer?.isRunning || false;
@@ -677,27 +682,38 @@ const GameDistributedScreen = ({ route, navigation }) => {
                 styles.mainButton,
                 myPlayer?.isEliminated && styles.mainButtonDisabled,
                 mode === 'sequential' && !isMyTurn && styles.mainButtonDisabled,
-                myPlayer?.isRunning ? styles.pauseButton : styles.playButton,
               ]}
               onPress={toggleMyPlayer}
               disabled={myPlayer?.isEliminated || (mode === 'sequential' && !isMyTurn)}
+              activeOpacity={0.8}
             >
-              {myPlayer?.isEliminated ? (
-                <>
-                  <Text style={styles.mainButtonText}>{t('distributed.eliminated')}</Text>
-                </>
-              ) : (
-                <>
-                  {myPlayer?.isRunning ? <Pause size={40} color="#fff" /> : <Play size={40} color="#fff" />}
-                  <Text style={styles.mainButtonText}>
-                    {myPlayer?.isRunning
-                      ? mode === 'sequential'
-                        ? t('distributed.skipToNext')
-                        : t('distributed.pause')
-                      : t('distributed.start')}
-                  </Text>
-                </>
-              )}
+              <LinearGradient
+                colors={
+                  myPlayer?.isEliminated
+                    ? ['#991B1B', '#7F1D1D']
+                    : myPlayer?.isRunning
+                      ? ['#F59E0B', '#D97706']
+                      : colors.secondaryGradient
+                }
+                style={styles.mainButtonGradient}
+              >
+                {myPlayer?.isEliminated ? (
+                  <>
+                    <Text style={styles.mainButtonText}>{t('distributed.eliminated')}</Text>
+                  </>
+                ) : (
+                  <>
+                    {myPlayer?.isRunning ? <Pause size={24} color="#fff" strokeWidth={2.5} /> : <Play size={24} color="#fff" strokeWidth={2.5} />}
+                    <Text style={styles.mainButtonText}>
+                      {myPlayer?.isRunning
+                        ? mode === 'sequential'
+                          ? t('distributed.skipToNext')
+                          : t('distributed.pause')
+                        : t('distributed.start')}
+                    </Text>
+                  </>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
 
             {mode === 'sequential' && !isMyTurn && (
@@ -758,7 +774,7 @@ const GameDistributedScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -785,11 +801,11 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: isDark ? 0.3 : 0.1,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: isDark ? 0 : 8,
   },
   lobbyIcon: {
     width: 80,
@@ -862,11 +878,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#981414ff',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: isDark ? 0.3 : 0.1,
     shadowRadius: 12,
-    elevation: 6,
+    elevation: isDark ? 0 : 6,
   },
   playersStatusHeader: {
     flexDirection: 'row',
@@ -894,7 +910,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 14,
+    padding: 10,
     borderRadius: 14,
   },
   lobbyPlayerLeft: {
@@ -1006,11 +1022,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: isDark ? 0.3 : 0.1,
     shadowRadius: 12,
-    elevation: 6,
+    elevation: isDark ? 0 : 6,
   },
   headerTop: {
     flexDirection: 'row',
@@ -1078,14 +1094,14 @@ const styles = StyleSheet.create({
   },
   myPlayerCard: {
     borderRadius: 24,
-    borderWidth: 3,
+    borderWidth: isDark ? 3 : 2,
     padding: 24,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: isDark ? 0.3 : 0.15,
     shadowRadius: 16,
-    elevation: 12,
+    elevation: isDark ? 0 : 12,
   },
   myPlayerLabel: {
     fontSize: 13,
@@ -1109,7 +1125,7 @@ const styles = StyleSheet.create({
   mainButton: {
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -1135,11 +1151,11 @@ const styles = StyleSheet.create({
   otherPlayersSection: {
     borderRadius: 20,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: isDark ? colors.primary : '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: isDark ? 0.3 : 0.1,
     shadowRadius: 12,
-    elevation: 6,
+    elevation: isDark ? 0 : 6,
   },
   sectionTitle: {
     fontSize: 18,
@@ -1150,7 +1166,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 14,
     borderRadius: 14,
     marginBottom: 10,
   },
@@ -1183,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   myPlayerCardEliminated: {
     opacity: 0.6,
-    borderWidth: 3,
+    borderWidth: isDark ? 3 : 2,
     borderColor: '#DC2626',
   },
   mainButtonDisabled: {
